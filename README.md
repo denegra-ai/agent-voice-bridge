@@ -131,13 +131,17 @@ curl http://localhost:8000/health   # {"status":"ok","version":"0.1.0","channels
 
 **3. Point the channel at the bridge**
 
-- **Meta:** App Dashboard → WhatsApp → Configuration → Webhook.
-  Callback URL `https://<your-tunnel>/webhook/meta`, Verify token = `META_VERIFY_TOKEN`.
-  Click *Verify and save*, then subscribe to the **messages** field.
+- **Meta:** App Dashboard → Use cases → WhatsApp → Customize → Step 2. Production setup →
+  Configure Webhooks. Callback URL `https://<your-tunnel>/webhook/meta`, Verify token =
+  `META_VERIFY_TOKEN`. Click *Verify and save*, then subscribe to the **messages** field.
 - **Twilio:** Console → Messaging → WhatsApp Sandbox (or your sender) →
   *When a message comes in* = `https://<your-tunnel>/webhook/twilio`, method `POST`.
 
 Send a text, then a voice note. Done.
+
+First time with Meta or Twilio? The step-by-step guides cover accounts, test numbers, tokens
+and common errors: [Meta WhatsApp Cloud API setup](docs/meta-setup.md) ·
+[Twilio WhatsApp setup](docs/twilio-setup.md).
 
 ### Without Docker
 
