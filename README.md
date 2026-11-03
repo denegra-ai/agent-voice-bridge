@@ -107,7 +107,7 @@ a public HTTPS tunnel such as [ngrok](https://ngrok.com).
 **1. Configure**
 
 ```bash
-git clone https://github.com/denegra/agent-voice-bridge.git && cd agent-voice-bridge
+git clone https://github.com/denegra-ai/agent-voice-bridge.git && cd agent-voice-bridge
 cp .env.example .env
 ```
 
