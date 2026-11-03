@@ -104,3 +104,48 @@ async def test_deepgram_transcription(tmp_path):
         )
     assert seen["auth"] == "Token dg"
     assert reply is None  # empty reply_text means nothing is sent
+
+
+@pytest.mark.anyio
+async def test_azure_openai_stt_and_tts(tmp_path):
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        if request.url.path.endswith("/audio/transcriptions"):
+            return httpx.Response(200, json={"text": "merhaba"})
+        if request.url.path.endswith("/audio/speech"):
+            return httpx.Response(200, content=b"OggS")
+        return httpx.Response(200, json={"reply_text": "selam"})
+
+    async def fetch_audio():
+        return b"ogg", "audio/ogg"
+
+    settings = make_settings(
+        tmp_path,
+        openai_api_key=None,
+        stt_provider="azure",
+        tts_provider="azure",
+        azure_openai_endpoint="https://my-resource.openai.azure.com/",
+        azure_openai_api_key="az-key",
+        azure_openai_tts_deployment="my-tts",
+    )
+    async with _client(handler) as http:
+        reply = await process_message(
+            http, settings, channel="meta", sender_id="1", fetch_audio=fetch_audio
+        )
+
+    stt, _, tts = seen
+    assert str(stt.url) == (
+        "https://my-resource.openai.azure.com/openai/deployments/whisper/audio/transcriptions"
+        "?api-version=2025-03-01-preview"
+    )
+    assert stt.headers["api-key"] == "az-key"
+    assert "Authorization" not in stt.headers
+    assert tts.url.path == "/openai/deployments/my-tts/audio/speech"
+    assert reply is not None and reply.audio_url is not None
+
+
+def test_azure_provider_requires_endpoint_and_key(tmp_path):
+    with pytest.raises(ValueError, match="AZURE_OPENAI_ENDPOINT.*AZURE_OPENAI_API_KEY"):
+        make_settings(tmp_path, stt_provider="azure")

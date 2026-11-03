@@ -6,11 +6,10 @@ from pathlib import Path
 
 import httpx
 
-from app.config import Settings
+from app.config import Settings, openai_audio_target
 
 logger = logging.getLogger(__name__)
 
-OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
 TTS_TIMEOUT_SECONDS = 60.0
 
@@ -18,8 +17,8 @@ TTS_TIMEOUT_SECONDS = 60.0
 async def synthesize(http: httpx.AsyncClient, settings: Settings, text: str) -> str:
     """Render `text` to an audio file in `settings.audio_dir` and return its file name.
 
-    OpenAI returns Ogg/Opus, which WhatsApp plays as a voice note. ElevenLabs returns MP3,
-    which WhatsApp shows as a regular audio attachment.
+    OpenAI and Azure OpenAI return Ogg/Opus, which WhatsApp plays as a voice note. ElevenLabs
+    returns MP3, which WhatsApp shows as a regular audio attachment.
     """
     started = time.perf_counter()
     if settings.tts_provider == "elevenlabs":
@@ -39,12 +38,14 @@ async def synthesize(http: httpx.AsyncClient, settings: Settings, text: str) -> 
 
 
 async def _synthesize_openai(http: httpx.AsyncClient, settings: Settings, text: str) -> bytes:
-    assert settings.openai_api_key is not None
+    url, headers, model = openai_audio_target(
+        settings, "speech", azure=settings.tts_provider == "azure"
+    )
     response = await http.post(
-        OPENAI_SPEECH_URL,
-        headers={"Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"},
+        url,
+        headers=headers,
         json={
-            "model": settings.openai_tts_model,
+            "model": model,
             "voice": settings.openai_tts_voice,
             "input": text,
             "response_format": "opus",

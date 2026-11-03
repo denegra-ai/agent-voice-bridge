@@ -31,15 +31,22 @@ class Settings(BaseSettings):
     twilio_auth_token: SecretStr | None = None
 
     # Speech-to-text
-    stt_provider: Literal["openai", "deepgram"] = "openai"
+    stt_provider: Literal["openai", "azure", "deepgram"] = "openai"
     stt_language: str | None = None
     openai_api_key: SecretStr | None = None
     openai_stt_model: str = "whisper-1"
     deepgram_api_key: SecretStr | None = None
     deepgram_model: str = "nova-3"
 
+    # Azure OpenAI (STT_PROVIDER=azure and/or TTS_PROVIDER=azure)
+    azure_openai_endpoint: AnyHttpUrl | None = None
+    azure_openai_api_key: SecretStr | None = None
+    azure_openai_api_version: str = "2025-03-01-preview"
+    azure_openai_stt_deployment: str = "whisper"
+    azure_openai_tts_deployment: str = "gpt-4o-mini-tts"
+
     # Text-to-speech
-    tts_provider: Literal["openai", "elevenlabs"] = "openai"
+    tts_provider: Literal["openai", "azure", "elevenlabs"] = "openai"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "alloy"
     elevenlabs_api_key: SecretStr | None = None
@@ -87,9 +94,39 @@ class Settings(BaseSettings):
                 missing.append("ELEVENLABS_API_KEY")
             if self.elevenlabs_voice_id is None:
                 missing.append("ELEVENLABS_VOICE_ID")
+        if "azure" in (self.stt_provider, self.tts_provider):
+            if self.azure_openai_endpoint is None:
+                missing.append("AZURE_OPENAI_ENDPOINT")
+            if self.azure_openai_api_key is None:
+                missing.append("AZURE_OPENAI_API_KEY")
         if missing:
             raise ValueError("Missing required settings: " + ", ".join(dict.fromkeys(missing)))
         return self
+
+
+def openai_audio_target(
+    settings: Settings, operation: Literal["transcriptions", "speech"], *, azure: bool
+) -> tuple[str, dict[str, str], str]:
+    """URL, auth headers and model name for an OpenAI or Azure OpenAI audio call.
+
+    Both services take the same request body; only the address and the key header differ.
+    """
+    stt = operation == "transcriptions"
+    if azure:
+        assert settings.azure_openai_endpoint is not None
+        assert settings.azure_openai_api_key is not None
+        deployment = (
+            settings.azure_openai_stt_deployment if stt else settings.azure_openai_tts_deployment
+        )
+        url = (
+            f"{str(settings.azure_openai_endpoint).rstrip('/')}/openai/deployments/{deployment}"
+            f"/audio/{operation}?api-version={settings.azure_openai_api_version}"
+        )
+        return url, {"api-key": settings.azure_openai_api_key.get_secret_value()}, deployment
+    assert settings.openai_api_key is not None
+    model = settings.openai_stt_model if stt else settings.openai_tts_model
+    headers = {"Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"}
+    return f"https://api.openai.com/v1/audio/{operation}", headers, model
 
 
 @lru_cache

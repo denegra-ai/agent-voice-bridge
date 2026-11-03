@@ -3,11 +3,10 @@ import time
 
 import httpx
 
-from app.config import Settings
+from app.config import Settings, openai_audio_target
 
 logger = logging.getLogger(__name__)
 
-OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
 DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
 STT_TIMEOUT_SECONDS = 60.0
 
@@ -58,15 +57,17 @@ async def transcribe(
 async def _transcribe_openai(
     http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
 ) -> str:
-    assert settings.openai_api_key is not None
+    url, headers, model = openai_audio_target(
+        settings, "transcriptions", azure=settings.stt_provider == "azure"
+    )
     base_mime = mime_type.split(";")[0].strip().lower()
     filename = f"audio.{_EXTENSIONS.get(base_mime, 'ogg')}"
-    data = {"model": settings.openai_stt_model}
+    data = {"model": model}
     if settings.stt_language:
         data["language"] = settings.stt_language
     response = await http.post(
-        OPENAI_TRANSCRIPTIONS_URL,
-        headers={"Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"},
+        url,
+        headers=headers,
         data=data,
         files={"file": (filename, audio, base_mime)},
         timeout=STT_TIMEOUT_SECONDS,

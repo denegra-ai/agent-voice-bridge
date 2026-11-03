@@ -29,10 +29,10 @@ download, speech-to-text, text-to-speech, and delivery.
 flowchart LR
     U([User on WhatsApp]) -- voice note / text --> P{{Meta Cloud API<br/>or Twilio}}
     P -- webhook --> B[agent-voice-bridge]
-    B -- "voice: download + transcribe" --> STT[(Whisper / Deepgram)]
+    B -- "voice: download + transcribe" --> STT[(Whisper / Azure OpenAI / Deepgram)]
     B -- "POST {sender_id, message_type, content, channel}" --> A[Your agent<br/>AGENT_WEBHOOK_URL]
     A -- "{reply_text}" --> B
-    B -- "voice: synthesize" --> TTS[(OpenAI TTS / ElevenLabs)]
+    B -- "voice: synthesize" --> TTS[(OpenAI / Azure OpenAI / ElevenLabs)]
     B -- "text, or audio link to /static/audio" --> P
     P --> U
 ```
@@ -100,7 +100,7 @@ async def agent(msg: dict) -> dict:
 
 ## Quickstart (Docker, ~3 minutes)
 
-**Prerequisites:** Docker, an OpenAI API key, and either a Meta WhatsApp Cloud API app or a
+**Prerequisites:** Docker, an OpenAI API key (or an Azure OpenAI resource), and either a Meta WhatsApp Cloud API app or a
 Twilio account (the Twilio WhatsApp Sandbox is fine for testing). For local testing you also need
 a public HTTPS tunnel such as [ngrok](https://ngrok.com).
 
@@ -154,8 +154,8 @@ Every option is documented in [`.env.example`](.env.example). The most important
 |---|---|---|
 | `AGENT_WEBHOOK_URL` | — | Your agent endpoint (required) |
 | `PUBLIC_BASE_URL` | — | Public HTTPS URL of this service (required) |
-| `STT_PROVIDER` | `openai` | `openai` (Whisper) or `deepgram` |
-| `TTS_PROVIDER` | `openai` | `openai` (Ogg/Opus voice note) or `elevenlabs` (MP3) |
+| `STT_PROVIDER` | `openai` | `openai` (Whisper), `azure` (Azure OpenAI) or `deepgram` |
+| `TTS_PROVIDER` | `openai` | `openai` / `azure` (Ogg/Opus voice note) or `elevenlabs` (MP3) |
 | `AGENT_TIMEOUT_SECONDS` | `30` | Per-attempt agent timeout |
 | `AGENT_MAX_RETRIES` | `2` | Retries on connect errors and 429/502/503/504 |
 | `AUDIO_TTL_SECONDS` | `3600` | Generated audio is deleted after this |
@@ -171,8 +171,8 @@ Every option is documented in [`.env.example`](.env.example). The most important
 - **Retries.** The agent call is retried only when the agent cannot have processed the
   message (connection failure, 429/502/503/504). A `500` or a read timeout is not retried, so
   your agent never answers the same message twice because of the bridge.
-- **Voice note vs. audio file.** OpenAI TTS produces Ogg/Opus, which WhatsApp plays as a voice
-  note. ElevenLabs output is MP3 and shows up as an audio attachment.
+- **Voice note vs. audio file.** OpenAI and Azure OpenAI TTS produce Ogg/Opus, which WhatsApp
+  plays as a voice note. ElevenLabs output is MP3 and shows up as an audio attachment.
 - **Scaling.** Webhook dedupe is in-memory, so run one process per instance (the default).
   For horizontal scaling put a shared store in front of `is_duplicate` and serve audio from
   object storage.
