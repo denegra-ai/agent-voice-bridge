@@ -198,7 +198,7 @@ Tests mock every external API with `httpx.MockTransport` — no keys or network 
 We build and deploy resilient, high-volume AI voice & chat pipelines integrated with internal
 enterprise infrastructure, custom LLMs, and ERP/CRM systems.
 
-📩 Contact: enterprise@denegra.com | [Book an Architecture Call](https://denegra.com)
+📩 Contact: info@denegra.ai | [Book an Architecture Call](https://denegra.com)
 
 ---
 
