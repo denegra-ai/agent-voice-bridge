@@ -25,7 +25,9 @@ jobs:
           clones=$(gh api "repos/$REPO/traffic/clones")
           referrers=$(gh api "repos/$REPO/traffic/popular/referrers")
           paths=$(gh api "repos/$REPO/traffic/popular/paths")
-          repo=$(gh api "repos/$REPO" --jq '{stars: .stargazers_count, forks: .forks_count}')
+          repo=$(gh api "repos/$REPO" --jq '{stars: .stargazers_count, forks: .forks_count, default_branch}')
+          last_commit=$(gh api "repos/$REPO/commits/$(jq -r .default_branch <<<"$repo")" --jq .commit.committer.date)
+          idle_days=$(( ($(date -u +%s) - $(date -u -d "$last_commit" +%s)) / 86400 ))
 
           file="traffic-$(date -u +%F).json"
           jq -n --arg date "$(date -u +%F)" \
@@ -51,6 +53,13 @@ jobs:
               (if (.paths | length) == 0 then "none" else (.paths[:10][] | "\(.path): \(.count) (\(.uniques) unique)") end)
           ' "$file")
 
+          # GitHub disables schedules in public repos after 60 days without commits.
+          if [ "$idle_days" -ge 45 ]; then
+            summary="$summary
+
+          ⚠️ No commits for $idle_days days. GitHub turns this weekly snapshot off at 60; push any commit to keep it running."
+          fi
+
           # Telegram responses echo the chat id; print only the error description.
           check() {
             if [ "$(jq -r .ok <<<"$1")" != "true" ]; then
@@ -65,3 +74,15 @@ jobs:
             -F "chat_id=${TELEGRAM_CHAT_ID}" \
             -F "document=@${file}")"
           echo "Sent traffic snapshot ($file)"
+
+      - name: Alert on failure
+        # An expired TRAFFIC_TOKEN would otherwise only show up as a failed run.
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -sS -o /dev/null -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=⚠️ Weekly traffic snapshot failed (expired TRAFFIC_TOKEN?): ${RUN_URL}"

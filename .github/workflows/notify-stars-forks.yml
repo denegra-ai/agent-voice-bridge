@@ -20,10 +20,12 @@ jobs:
           EVENT: ${{ github.event_name }}
           ACTOR: ${{ github.event.sender.login }}
           REPO: ${{ github.repository }}
-          STARS: ${{ github.event.repository.stargazers_count }}
-          FORKS: ${{ github.event.repository.forks_count }}
           FORKEE: ${{ github.event.forkee.full_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # Payload counts can predate the new star or fork; read the live ones.
+          counts=$(gh api "repos/$REPO" --jq '"\(.stargazers_count) \(.forks_count)"')
+          read -r STARS FORKS <<<"$counts"
           if [ "$EVENT" = "fork" ]; then
             text="🍴 New fork of $REPO by @$ACTOR → $FORKEE
           Forks: $FORKS · Stars: $STARS"
