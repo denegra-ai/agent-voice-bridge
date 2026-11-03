@@ -1,0 +1,10 @@
+services:
+  bridge:
+    build: .
+    image: agent-voice-bridge:latest
+    env_file: .env
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

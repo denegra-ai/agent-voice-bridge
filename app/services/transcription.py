@@ -1,0 +1,101 @@
+import logging
+import time
+
+import httpx
+
+from app.config import Settings
+
+logger = logging.getLogger(__name__)
+
+OPENAI_TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
+DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
+STT_TIMEOUT_SECONDS = 60.0
+
+_EXTENSIONS = {
+    "audio/ogg": "ogg",
+    "audio/opus": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "audio/mp4": "m4a",
+    "audio/x-m4a": "m4a",
+    "audio/aac": "m4a",
+    "audio/amr": "amr",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/webm": "webm",
+}
+
+
+async def download_media(
+    http: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    auth: tuple[str, str] | None = None,
+) -> bytes:
+    response = await http.get(url, headers=headers, auth=auth, follow_redirects=True)
+    response.raise_for_status()
+    return response.content
+
+
+async def transcribe(
+    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
+) -> str:
+    started = time.perf_counter()
+    if settings.stt_provider == "deepgram":
+        text = await _transcribe_deepgram(http, settings, audio, mime_type)
+    else:
+        text = await _transcribe_openai(http, settings, audio, mime_type)
+    logger.info(
+        "Transcribed %d bytes via %s in %.0f ms",
+        len(audio),
+        settings.stt_provider,
+        (time.perf_counter() - started) * 1000,
+    )
+    return text.strip()
+
+
+async def _transcribe_openai(
+    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
+) -> str:
+    assert settings.openai_api_key is not None
+    base_mime = mime_type.split(";")[0].strip().lower()
+    filename = f"audio.{_EXTENSIONS.get(base_mime, 'ogg')}"
+    data = {"model": settings.openai_stt_model}
+    if settings.stt_language:
+        data["language"] = settings.stt_language
+    response = await http.post(
+        OPENAI_TRANSCRIPTIONS_URL,
+        headers={"Authorization": f"Bearer {settings.openai_api_key.get_secret_value()}"},
+        data=data,
+        files={"file": (filename, audio, base_mime)},
+        timeout=STT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    return str(response.json().get("text", ""))
+
+
+async def _transcribe_deepgram(
+    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
+) -> str:
+    assert settings.deepgram_api_key is not None
+    params = {"model": settings.deepgram_model, "smart_format": "true"}
+    if settings.stt_language:
+        params["language"] = settings.stt_language
+    else:
+        params["detect_language"] = "true"
+    response = await http.post(
+        DEEPGRAM_LISTEN_URL,
+        params=params,
+        headers={
+            "Authorization": f"Token {settings.deepgram_api_key.get_secret_value()}",
+            "Content-Type": mime_type.split(";")[0].strip(),
+        },
+        content=audio,
+        timeout=STT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    try:
+        return str(response.json()["results"]["channels"][0]["alternatives"][0]["transcript"])
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError("Unexpected Deepgram response shape") from exc
