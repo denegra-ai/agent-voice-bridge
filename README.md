@@ -100,26 +100,25 @@ async def agent(msg: dict) -> dict:
 
 ## Quickstart (Docker, ~3 minutes)
 
-**Prerequisites:** Docker, an OpenAI API key (or an Azure OpenAI resource), and either a Meta WhatsApp Cloud API app or a
-Twilio account (the Twilio WhatsApp Sandbox is fine for testing). For local testing you also need
-a public HTTPS tunnel such as [ngrok](https://ngrok.com).
+**Prerequisites:** Docker, an OpenAI API key (or an Azure OpenAI resource), and either a Meta
+WhatsApp Cloud API app or a Twilio account (the Twilio WhatsApp Sandbox is fine for testing). For
+local testing you also need a public HTTPS tunnel such as [ngrok](https://ngrok.com).
 
-**1. Configure**
+**1. Configure with your own keys**
 
 ```bash
 git clone https://github.com/denegra-ai/agent-voice-bridge.git && cd agent-voice-bridge
-cp .env.example .env
+python3 scripts/configure.py
 ```
 
-Fill in `.env`:
+The setup wizard asks only what your choices need: your agent URL, your public URL, which
+channel (Meta and/or Twilio) and which speech providers. Keys are typed hidden, checked against
+the real service before anything is saved, and written to `.env` (readable only by you). It ends
+by printing the webhook URLs to paste into Meta or Twilio. Re-run it any time to change a value;
+pressing Enter keeps what is already there.
 
-- `AGENT_WEBHOOK_URL` — your agent (the echo agent above is `http://host.docker.internal:9000/agent`)
-- `PUBLIC_BASE_URL` — your tunnel URL, e.g. `https://abc123.ngrok-free.app`
-- `OPENAI_API_KEY`
-- Meta: `META_ACCESS_TOKEN`, `META_VERIFY_TOKEN`, `META_APP_SECRET` — and/or
-  Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`
-
-The service refuses to start and names the missing variable if something required is absent.
+Prefer editing by hand? `cp .env.example .env` — every variable is documented in the file. The
+service refuses to start and names the missing variable if something required is absent.
 
 **2. Run**
 
