@@ -1,0 +1,67 @@
+name: Weekly traffic snapshot
+
+# GitHub keeps traffic data for 14 days only; this sends it to Telegram every week.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  snapshot:
+    if: github.repository == 'denegra-ai/agent-voice-bridge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch traffic and send to Telegram
+        env:
+          # Traffic endpoints need Administration: read, which GITHUB_TOKEN cannot have.
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REPO: ${{ github.repository }}
+        run: |
+          views=$(gh api "repos/$REPO/traffic/views")
+          clones=$(gh api "repos/$REPO/traffic/clones")
+          referrers=$(gh api "repos/$REPO/traffic/popular/referrers")
+          paths=$(gh api "repos/$REPO/traffic/popular/paths")
+          repo=$(gh api "repos/$REPO" --jq '{stars: .stargazers_count, forks: .forks_count}')
+
+          file="traffic-$(date -u +%F).json"
+          jq -n --arg date "$(date -u +%F)" \
+            --argjson repo "$repo" --argjson views "$views" --argjson clones "$clones" \
+            --argjson referrers "$referrers" --argjson paths "$paths" \
+            '{date: $date, repo: $repo, views: $views, clones: $clones, referrers: $referrers, paths: $paths}' > "$file"
+
+          summary=$(jq -r --arg repo_name "$REPO" '
+            ([.views.views[], .clones.clones[]] | map(.timestamp[:10]) | unique) as $days
+            | (.views.views | map({key: .timestamp[:10], value: .}) | from_entries) as $v
+            | (.clones.clones | map({key: .timestamp[:10], value: .}) | from_entries) as $c
+            | "📊 Traffic for \($repo_name), last 14 days",
+              "Stars: \(.repo.stars) · Forks: \(.repo.forks)",
+              "Views: \(.views.count) (\(.views.uniques) unique) · Clones: \(.clones.count) (\(.clones.uniques) unique)",
+              "",
+              "Day: views/unique, clones/unique",
+              ($days[] | "\(.): \($v[.].count // 0)/\($v[.].uniques // 0), \($c[.].count // 0)/\($c[.].uniques // 0)"),
+              "",
+              "Top referrers:",
+              (if (.referrers | length) == 0 then "none" else (.referrers[:10][] | "\(.referrer): \(.count) (\(.uniques) unique)") end),
+              "",
+              "Top pages:",
+              (if (.paths | length) == 0 then "none" else (.paths[:10][] | "\(.path): \(.count) (\(.uniques) unique)") end)
+          ' "$file")
+
+          # Telegram responses echo the chat id; print only the error description.
+          check() {
+            if [ "$(jq -r .ok <<<"$1")" != "true" ]; then
+              echo "::error::Telegram: $(jq -r .description <<<"$1")"
+              exit 1
+            fi
+          }
+          check "$(curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${summary}")"
+          check "$(curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${file}")"
+          echo "Sent traffic snapshot ($file)"

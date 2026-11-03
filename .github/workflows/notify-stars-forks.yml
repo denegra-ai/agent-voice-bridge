@@ -1,0 +1,45 @@
+name: Notify stars and forks
+
+on:
+  fork:
+  watch:
+    types: [started]
+
+permissions: {}
+
+jobs:
+  notify:
+    # Forks copy this file; only the upstream repo has the Telegram secrets.
+    if: github.repository == 'denegra-ai/agent-voice-bridge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Telegram message
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          EVENT: ${{ github.event_name }}
+          ACTOR: ${{ github.event.sender.login }}
+          REPO: ${{ github.repository }}
+          STARS: ${{ github.event.repository.stargazers_count }}
+          FORKS: ${{ github.event.repository.forks_count }}
+          FORKEE: ${{ github.event.forkee.full_name }}
+        run: |
+          if [ "$EVENT" = "fork" ]; then
+            text="🍴 New fork of $REPO by @$ACTOR → $FORKEE
+          Forks: $FORKS · Stars: $STARS"
+          else
+            text="⭐ New star on $REPO by @$ACTOR
+          Stars: $STARS · Forks: $FORKS"
+          fi
+          text="$text
+          https://github.com/$ACTOR"
+
+          # The Telegram response echoes the chat id; keep it out of public logs.
+          response=$(curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${text}")
+          if [ "$(jq -r .ok <<<"$response")" != "true" ]; then
+            echo "::error::Telegram: $(jq -r .description <<<"$response")"
+            exit 1
+          fi
+          echo "Sent $EVENT notification for @$ACTOR"
