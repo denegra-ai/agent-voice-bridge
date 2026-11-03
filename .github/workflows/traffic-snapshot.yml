@@ -21,6 +21,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           REPO: ${{ github.repository }}
         run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::TRAFFIC_TOKEN is not set; skipping the traffic snapshot."
+            exit 0
+          fi
           views=$(gh api "repos/$REPO/traffic/views")
           clones=$(gh api "repos/$REPO/traffic/clones")
           referrers=$(gh api "repos/$REPO/traffic/popular/referrers")
