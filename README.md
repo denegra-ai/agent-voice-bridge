@@ -4,7 +4,7 @@
 
 **Turn any AI agent into a WhatsApp voice & chat agent — in five minutes.**
 
-Backed by [Denegra](https://denegra.com) — Enterprise AI Agents & Workflow Automation
+Backed by [Denegra](https://denegra.ai) — Enterprise AI Agents & Workflow Automation
 
 [![CI](https://github.com/denegra-ai/agent-voice-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/denegra-ai/agent-voice-bridge/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -198,7 +198,7 @@ Tests mock every external API with `httpx.MockTransport` — no keys or network 
 We build and deploy resilient, high-volume AI voice & chat pipelines integrated with internal
 enterprise infrastructure, custom LLMs, and ERP/CRM systems.
 
-📩 Contact: info@denegra.ai | [Book an Architecture Call](https://denegra.com)
+📩 Contact: info@denegra.ai | [Book an Architecture Call](https://denegra.ai)
 
 ---
 
