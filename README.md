@@ -6,6 +6,7 @@
 
 Backed by [Denegra](https://denegra.com) — Enterprise AI Agents & Workflow Automation
 
+[![CI](https://github.com/denegra-ai/agent-voice-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/denegra-ai/agent-voice-bridge/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-async-009688)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green)
