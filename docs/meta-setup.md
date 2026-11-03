@@ -117,6 +117,15 @@ only after that.
 
 Meta sends the verify token in the query string of the verification request, as both
 `hub.verify_token` and `hub_verify_token`. Uvicorn's access log prints that URL, so anyone who
-can read your logs can read the token. Filter both forms out of your logs (for example with
-`sed -E 's/(hub[._]verify_token=)[^& "]*/\1REDACTED/g'`), or start uvicorn with
-`--no-access-log`.
+can read your logs can read the token. Filtering logs only when you view them is not enough,
+because Docker keeps the raw lines. Turn the access log off instead: without Docker, add
+`--no-access-log` to the `uvicorn` command; with Docker Compose, override the command in
+`docker-compose.yml`:
+
+```yaml
+services:
+  bridge:
+    command: ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0",
+              "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*",
+              "--no-access-log"]
+```

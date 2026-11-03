@@ -43,8 +43,9 @@ Send a text and then a voice note to the sandbox number.
 Twilio signs every webhook with your auth token over the exact URL it called. The bridge
 rebuilds that URL from `PUBLIC_BASE_URL`, so:
 
-- `PUBLIC_BASE_URL` must be the same scheme and host you typed into Twilio, for example
-  `https://abc123.ngrok-free.app` for `https://abc123.ngrok-free.app/webhook/twilio`.
+- `PUBLIC_BASE_URL` must be exactly the part of the Twilio URL before `/webhook/twilio`, for
+  example `https://abc123.ngrok-free.app` for `https://abc123.ngrok-free.app/webhook/twilio`,
+  or `https://example.com/bridge` if a proxy serves the bridge under `/bridge`.
 - When your tunnel URL changes, update **both** Twilio and `PUBLIC_BASE_URL`, then restart the
   bridge.
 
@@ -65,5 +66,5 @@ through connecting a Meta business portfolio and verifying your number. Then set
 | `403 Invalid signature` | `PUBLIC_BASE_URL` differs from the URL in Twilio, or `TWILIO_AUTH_TOKEN` is wrong. |
 | Error `63015` | The phone has not joined the sandbox, or its membership expired. Send the join phrase again. |
 | Error `63016` | WhatsApp allows free-form replies only within 24 hours of the user's last message. Outside that window you need an approved template. |
-| Voice note arrives as text | Text-to-speech failed (for example a missing TTS key or deployment), so the bridge fell back to a text reply. Check the bridge log. |
+| You send a voice note but the reply comes back as text | Text-to-speech failed (for example a missing TTS key or deployment), so the bridge fell back to a text reply. Check the bridge log. |
 | Nothing happens at all | Check **Monitor** → **Logs** → **Errors** in Twilio; a `11200` error means Twilio could not reach your URL. |
