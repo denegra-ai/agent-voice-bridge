@@ -126,7 +126,7 @@ service refuses to start and names the missing variable if something required is
 ```bash
 docker compose up -d --build
 ngrok http 8000
-curl http://localhost:8000/health   # {"status":"ok","version":"0.1.1","channels":["meta"]}
+curl http://localhost:8000/health   # {"status":"ok","version":"0.1.2","channels":["meta"]}
 ```
 
 **3. Point the channel at the bridge**
