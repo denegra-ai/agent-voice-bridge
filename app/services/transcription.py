@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -9,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
 STT_TIMEOUT_SECONDS = 60.0
+
+# Twilio can answer 404 for a few seconds after the webhook, until the voice note is stored.
+MEDIA_NOT_READY_DELAYS_SECONDS = (1.0, 2.0, 4.0, 8.0)
 
 _EXTENSIONS = {
     "audio/ogg": "ogg",
@@ -32,9 +36,17 @@ async def download_media(
     headers: dict[str, str] | None = None,
     auth: tuple[str, str] | None = None,
 ) -> bytes:
-    response = await http.get(url, headers=headers, auth=auth, follow_redirects=True)
-    response.raise_for_status()
-    return response.content
+    delays = iter(MEDIA_NOT_READY_DELAYS_SECONDS)
+    attempt = 0
+    while True:
+        response = await http.get(url, headers=headers, auth=auth, follow_redirects=True)
+        delay = next(delays, None)
+        if response.status_code != 404 or delay is None:
+            response.raise_for_status()
+            return response.content
+        attempt += 1
+        logger.warning("Media not ready (HTTP 404); retry %d in %.0fs", attempt, delay)
+        await asyncio.sleep(delay)
 
 
 async def transcribe(
