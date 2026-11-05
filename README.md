@@ -85,7 +85,8 @@ An empty `reply_text` sends nothing. `sender_id` is the WhatsApp number for Meta
 Twilio `From` value (for example `whatsapp:+905551112233`) for Twilio — use it as your
 conversation/session key.
 
-A complete echo agent for testing:
+Ready-to-run LangGraph, CrewAI and n8n agents are in [`examples/`](examples/). A complete echo
+agent for testing:
 
 ```python
 # echo_agent.py — run with: uvicorn echo_agent:app --port 9000
