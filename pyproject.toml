@@ -1,6 +1,6 @@
 [project]
 name = "agent-voice-bridge"
-version = "0.1.1"
+version = "0.1.2"
 description = "Async FastAPI gateway that connects WhatsApp (Meta Cloud API) and Twilio voice/text messages to any external AI agent."
 readme = "README.md"
 license = "Apache-2.0"
