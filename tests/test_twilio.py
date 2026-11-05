@@ -100,22 +100,24 @@ def test_voice_message_gets_voice_reply(make_client, upstream):
     assert sent["MediaUrl"][0].startswith(f"{PUBLIC_BASE}/static/audio/")
 
 
+def _voice_form(message_sid: str, media_id: str) -> dict[str, str]:
+    return {
+        "MessageSid": message_sid,
+        "From": "whatsapp:+905551112233",
+        "To": "whatsapp:+14155238886",
+        "Body": "",
+        "NumMedia": "1",
+        "MediaUrl0": f"https://api.twilio.com/media/{media_id}",
+        "MediaContentType0": "audio/ogg",
+    }
+
+
 def test_voice_note_waits_until_twilio_media_is_ready(make_client, upstream, monkeypatch):
     monkeypatch.setattr(transcription, "MEDIA_NOT_READY_DELAYS_SECONDS", (0, 0, 0, 0))
     media = iter([httpx.Response(404), httpx.Response(404), httpx.Response(200, content=b"ogg")])
     upstream.on("GET", "api.twilio.com", "/media", lambda r: next(media))
     upstream.on("POST", "api.twilio.com", "/2010", lambda r: httpx.Response(201, json={}))
-    form = {
-        "MessageSid": "SM3",
-        "From": "whatsapp:+905551112233",
-        "To": "whatsapp:+14155238886",
-        "Body": "",
-        "NumMedia": "1",
-        "MediaUrl0": "https://api.twilio.com/media/ME2",
-        "MediaContentType0": "audio/ogg",
-    }
-
-    assert _post(make_client(), form).status_code == 200
+    assert _post(make_client(), _voice_form("SM3", "ME2")).status_code == 200
 
     assert len(upstream.find("api.twilio.com", "/media")) == 3
     (agent_call,) = upstream.find("agent.test")
@@ -126,17 +128,7 @@ def test_voice_note_waits_until_twilio_media_is_ready(make_client, upstream, mon
 def test_voice_note_gives_up_when_twilio_media_never_appears(make_client, upstream, monkeypatch):
     monkeypatch.setattr(transcription, "MEDIA_NOT_READY_DELAYS_SECONDS", (0, 0, 0, 0))
     upstream.on("GET", "api.twilio.com", "/media", lambda r: httpx.Response(404))
-    form = {
-        "MessageSid": "SM4",
-        "From": "whatsapp:+905551112233",
-        "To": "whatsapp:+14155238886",
-        "Body": "",
-        "NumMedia": "1",
-        "MediaUrl0": "https://api.twilio.com/media/ME3",
-        "MediaContentType0": "audio/ogg",
-    }
-
-    assert _post(make_client(), form).status_code == 200
+    assert _post(make_client(), _voice_form("SM4", "ME3")).status_code == 200
 
     assert len(upstream.find("api.twilio.com", "/media")) == 5
     assert upstream.find("agent.test") == []

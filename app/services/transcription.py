@@ -36,14 +36,17 @@ async def download_media(
     headers: dict[str, str] | None = None,
     auth: tuple[str, str] | None = None,
 ) -> bytes:
-    for delay in (*MEDIA_NOT_READY_DELAYS_SECONDS, None):
+    delays = iter(MEDIA_NOT_READY_DELAYS_SECONDS)
+    attempt = 0
+    while True:
         response = await http.get(url, headers=headers, auth=auth, follow_redirects=True)
+        delay = next(delays, None)
         if response.status_code != 404 or delay is None:
             response.raise_for_status()
             return response.content
-        logger.warning("Media not ready (HTTP 404); retrying in %.0fs", delay)
+        attempt += 1
+        logger.warning("Media not ready (HTTP 404); retry %d in %.0fs", attempt, delay)
         await asyncio.sleep(delay)
-    raise AssertionError("the last attempt always returns or raises")
 
 
 async def transcribe(
