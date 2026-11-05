@@ -1,6 +1,10 @@
+import tomllib
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
+from app import __version__
 from app.config import Settings
 from tests.conftest import make_settings
 
@@ -39,3 +43,8 @@ def test_empty_env_value_means_unset(monkeypatch):
     }.items():
         monkeypatch.setenv(name, value)
     assert Settings(_env_file=None).twilio_enabled is False
+
+
+def test_version_matches_pyproject():
+    pyproject = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
+    assert __version__ == pyproject["project"]["version"]
