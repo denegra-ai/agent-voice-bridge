@@ -17,16 +17,17 @@ from crewai import Agent, Crew, Task
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-assistant = Agent(
-    role="WhatsApp customer assistant",
-    goal="Answer each customer message helpfully and briefly",
-    backstory="You answer WhatsApp messages for a small business.",
-    llm=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-)
+MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
 
 
 def make_crew() -> Crew:
-    # A crew keeps state while it runs, so each message gets its own.
+    # Agents and crews keep state while they run, so each message gets its own.
+    assistant = Agent(
+        role="WhatsApp customer assistant",
+        goal="Answer each customer message helpfully and briefly",
+        backstory="You answer WhatsApp messages for a small business.",
+        llm=MODEL,
+    )
     reply_task = Task(
         # {message} is filled from kickoff inputs, never formatted into the prompt by hand.
         description="A customer sent this WhatsApp message: {message}\nWrite the reply.",
@@ -52,7 +53,8 @@ AUTH_TOKEN = os.environ.get("AGENT_AUTH_TOKEN")
 
 @app.post("/agent")
 async def agent(msg: BridgeMessage, authorization: str = Header(default="")) -> dict:
-    if AUTH_TOKEN and not secrets.compare_digest(authorization, f"Bearer {AUTH_TOKEN}"):
+    expected = f"Bearer {AUTH_TOKEN}".encode()
+    if AUTH_TOKEN and not secrets.compare_digest(authorization.encode(), expected):
         raise HTTPException(status_code=401)
     result = await make_crew().kickoff_async(inputs={"message": msg.content})
     return {"reply_text": result.raw}

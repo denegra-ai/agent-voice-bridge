@@ -24,10 +24,12 @@ SYSTEM_PROMPT = (
 )
 
 model = ChatOpenAI(model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"))
+HISTORY_MESSAGES = 20  # the model sees the last 10 exchanges, so long chats stay cheap
 
 
 async def respond(state: MessagesState) -> dict:
-    reply = await model.ainvoke([("system", SYSTEM_PROMPT), *state["messages"]])
+    history = state["messages"][-HISTORY_MESSAGES:]
+    reply = await model.ainvoke([("system", SYSTEM_PROMPT), *history])
     return {"messages": [reply]}
 
 
@@ -51,10 +53,11 @@ AUTH_TOKEN = os.environ.get("AGENT_AUTH_TOKEN")
 
 @app.post("/agent")
 async def agent(msg: BridgeMessage, authorization: str = Header(default="")) -> dict:
-    if AUTH_TOKEN and not secrets.compare_digest(authorization, f"Bearer {AUTH_TOKEN}"):
+    expected = f"Bearer {AUTH_TOKEN}".encode()
+    if AUTH_TOKEN and not secrets.compare_digest(authorization.encode(), expected):
         raise HTTPException(status_code=401)
     result = await graph.ainvoke(
         {"messages": [("user", msg.content)]},
         config={"configurable": {"thread_id": f"{msg.channel}:{msg.sender_id}"}},
     )
-    return {"reply_text": result["messages"][-1].content}
+    return {"reply_text": result["messages"][-1].text}
