@@ -55,8 +55,8 @@ async def transcribe(
 ) -> str:
     """Transcribe with STT_PROVIDER; on an error or an empty transcript, try STT_FALLBACK_PROVIDER.
 
-    An empty transcript is treated like a failure because auto-detection can silently return
-    nothing (bench/stt: Deepgram heard most Arabic clips as English and returned "").
+    An empty transcript is treated like a failure because a wrong language setting can silently
+    return nothing (bench/stt: the bridge's old Deepgram setting returned "" for most Arabic clips).
     """
     fallback = settings.stt_fallback_provider
     try:
@@ -134,10 +134,9 @@ async def _transcribe_deepgram(
 ) -> str:
     assert settings.deepgram_api_key is not None
     params = {"model": settings.deepgram_model, "smart_format": "true"}
-    if settings.stt_language:
-        params["language"] = settings.stt_language
-    else:
-        params["detect_language"] = "true"
+    # "multi" is Deepgram's language-agnostic mode; detect_language=true returned empty
+    # transcripts for most Arabic clips in bench/stt.
+    params["language"] = settings.stt_language or "multi"
     response = await http.post(
         DEEPGRAM_LISTEN_URL,
         params=params,

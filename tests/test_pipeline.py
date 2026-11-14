@@ -311,3 +311,20 @@ async def test_misconfigured_primary_is_logged_as_an_error(tmp_path, caplog):
         await _voice(http, _fallback_settings(tmp_path))
     failed = [r for r in caplog.records if "Transcription via deepgram failed" in r.message]
     assert [r.levelname for r in failed] == ["ERROR"]
+
+
+@pytest.mark.anyio
+async def test_deepgram_without_a_language_uses_multilingual_mode(tmp_path):
+    seen = {}
+
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            seen["params"] = dict(request.url.params)
+            return _deepgram("merhaba")
+        return httpx.Response(200, json={"reply_text": ""})
+
+    settings = make_settings(tmp_path, stt_provider="deepgram", deepgram_api_key="dg")
+    async with _client(handler) as http:
+        await _voice(http, settings)
+    assert seen["params"]["language"] == "multi"
+    assert "detect_language" not in seen["params"]
