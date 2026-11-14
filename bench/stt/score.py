@@ -17,17 +17,26 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ARABIC_MARKS = re.compile("[ؐ-ًؚ-ٰٟـ]")
-ARABIC_LETTERS = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ى": "ي"})
+# Spelling variants that are not recognition errors: alef forms, alef maqsura, ta marbuta.
+ARABIC_LETTERS = str.maketrans({"أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا", "ى": "ي", "ة": "ه"})
+# Arabic-Indic and Persian digits written by some models vs ASCII digits in the references.
+DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+# Turkish circumflex is optional in modern spelling (hâlâ / hala).
+TURKISH_CIRCUMFLEX = str.maketrans("âîû", "aiu")
 
 
 def normalize(text: str, lang: str) -> str:
-    text = unicodedata.normalize("NFKC", text)
+    text = unicodedata.normalize("NFKC", text).translate(DIGITS)
     if lang == "tr":
-        # Python's lower() maps I to i; Turkish needs I -> ı and İ -> i.
-        text = text.replace("I", "ı").replace("İ", "i")
+        # Python's lower() maps I to i; Turkish needs I -> ı and İ -> i. FLEURS also writes İ as
+        # i + combining dot above (U+0307), which NFKC keeps.
+        text = text.replace("I", "ı").replace("İ", "i").replace("\u0307", "")
     text = text.lower()
+    if lang == "tr":
+        text = text.translate(TURKISH_CIRCUMFLEX)
     if lang == "ar":
-        text = ARABIC_MARKS.sub("", text).translate(ARABIC_LETTERS)
+        # مائة and مئة are both standard spellings of "hundred".
+        text = ARABIC_MARKS.sub("", text).translate(ARABIC_LETTERS).replace("مائه", "مئه")
     text = text.replace("'", "").replace("’", "")
     text = "".join(" " if unicodedata.category(ch)[0] in "PS" else ch for ch in text)
     return " ".join(text.split())
@@ -105,6 +114,57 @@ def bootstrap_wer(runs: list[dict], samples: int = 2000) -> tuple[float, float]:
     return wers[int(0.025 * samples)], wers[int(0.975 * samples) - 1]
 
 
+def paired_difference(
+    a: list[dict], b: list[dict], samples: int = 2000
+) -> tuple[float, float, float] | None:
+    """WER of a minus WER of b over clips both measured, with a 95% paired bootstrap interval."""
+
+    def per_clip(runs: list[dict]) -> dict[str, tuple[float, int]]:
+        edits: dict[str, list[int]] = defaultdict(list)
+        words: dict[str, int] = {}
+        for run in runs:
+            for clip_id, clip_edits, clip_words in run["per_clip"]:
+                edits[clip_id].append(clip_edits)
+                words[clip_id] = clip_words
+        return {c: (statistics.mean(e), words[c]) for c, e in edits.items()}
+
+    ea, eb = per_clip(a), per_clip(b)
+    clips = [(ea[c][0], eb[c][0], ea[c][1]) for c in sorted(ea.keys() & eb.keys())]
+    if not clips:
+        return None
+
+    def diff(pick: list[tuple[float, float, int]]) -> float:
+        words = sum(w for _, _, w in pick)
+        return (sum(x for x, _, _ in pick) - sum(y for _, y, _ in pick)) / words
+
+    rng = random.Random(0)
+    diffs = sorted(diff(rng.choices(clips, k=len(clips))) for _ in range(samples))
+    return diff(clips), diffs[int(0.025 * samples)], diffs[int(0.975 * samples) - 1]
+
+
+def number_clips(paths: list[Path], references: dict[str, dict]) -> set[str]:
+    """Clips where the reference or any transcript has a digit.
+
+    FLEURS references write numbers sometimes as digits and sometimes as words, and models
+    choose their own format, so these clips can count a formatting choice as an error.
+    """
+    found = {cid for cid, clip in references.items() if re.search(r"\d", clip["reference"])}
+    for path in paths:
+        for row in map(json.loads, path.open(encoding="utf-8")):
+            if row["status"] == "ok" and re.search(r"\d", row["text"].translate(DIGITS)):
+                found.add(row["id"])
+    return found
+
+
+def pooled_wer(runs: list[dict], skip: set[str]) -> float | None:
+    per_run = []
+    for run in runs:
+        kept = [(e, w) for cid, e, w in run["per_clip"] if cid not in skip]
+        if kept:
+            per_run.append(sum(e for e, _ in kept) / sum(w for _, w in kept))
+    return statistics.mean(per_run) if per_run else None
+
+
 def pct(value: float | None) -> str:
     return "–" if value is None else f"{100 * value:.1f}%"
 
@@ -115,7 +175,9 @@ def main() -> None:
         for clip in map(json.loads, (HERE / "data" / "manifest.jsonl").open(encoding="utf-8"))
     }
     scores: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    for path in sorted((HERE / "results").glob("run[1-9]*/*.jsonl")):
+    paths = sorted((HERE / "results").glob("run[1-9]*/*.jsonl"))
+    skip = number_clips(paths, references)
+    for path in paths:
         for lang, s in score_file(path, references).items():
             scores[(path.stem, lang)].append(s)
     if not scores:
@@ -123,9 +185,9 @@ def main() -> None:
 
     print(
         "| Provider | Lang | Runs | WER (mean, range) | 95% CI | CER | p50 / p95 latency "
-        "| Not measured | Errors |"
+        "| Not measured | Errors | WER without number clips |"
     )
-    print("|---|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|---|")
     for (provider, lang), runs in sorted(scores.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         wers = [r["wer"] for r in runs if r["wer"] is not None]
         cers = [r["cer"] for r in runs if r["cer"] is not None]
@@ -145,8 +207,42 @@ def main() -> None:
         print(
             f"| {provider} | {lang} | {len(runs)} | {wer}{spread} | {pct(low)}–{pct(high)} | "
             f"{pct(statistics.mean(cers)) if cers else '–'} | "
-            f"{latency} | {not_measured} of {total} | {errors} of {total} |"
+            f"{latency} | {not_measured} of {total} | {errors} of {total} | "
+            f"{pct(pooled_wer(runs, skip))} |"
         )
+    counts = {
+        lang: (
+            sum(1 for c in skip if references[c]["lang"] == lang),
+            sum(1 for c in references.values() if c["lang"] == lang),
+        )
+        for lang in ("tr", "ar", "en")
+    }
+    print(
+        "\nNumber clips (a digit in the reference or in any transcript), left out of the last "
+        "column: "
+        + ", ".join(f"{lang} {n} of {total}" for lang, (n, total) in counts.items())
+        + "."
+    )
+
+    print(
+        "\n## Paired differences (auto-detect)\n\n"
+        "WER of A minus WER of B on the same clips, in points, with a 95% paired bootstrap "
+        "interval. An interval that includes 0 means 40 clips can't tell A and B apart.\n"
+    )
+    print("| Lang | A | B | A − B | 95% CI |")
+    print("|---|---|---|---|---|")
+    auto = sorted({p for p, _ in scores if "+hint" not in p})
+    for lang in ("tr", "ar", "en"):
+        for i, a in enumerate(auto):
+            for b in auto[i + 1 :]:
+                if (a, lang) in scores and (b, lang) in scores:
+                    result = paired_difference(scores[(a, lang)], scores[(b, lang)])
+                    if result is None:
+                        print(f"| {lang} | {a} | {b} | – | no clips measured by both |")
+                        continue
+                    d, low, high = result
+                    interval = f"{100 * low:+.1f} to {100 * high:+.1f}"
+                    print(f"| {lang} | {a} | {b} | {100 * d:+.1f} | {interval} |")
 
 
 if __name__ == "__main__":

@@ -17,3 +17,19 @@ def test_edit_distance_counts_word_substitutions_insertions_deletions():
     assert edit_distance("a b c".split(), "a x c d".split()) == 2
     assert edit_distance([], "a b".split()) == 2
     assert edit_distance("a b".split(), []) == 2
+
+
+def test_arabic_ta_marbuta_and_arabic_indic_digits_are_normalized():
+    assert normalize("مدينة ٢٥", "ar") == normalize("مدينه 25", "ar")
+
+
+def test_turkish_circumflex_is_optional():
+    assert normalize("hâlâ", "tr") == normalize("hala", "tr")
+
+
+def test_turkish_combining_dot_above_is_removed():
+    assert normalize("i̇nşaat", "tr") == normalize("İnşaat", "tr") == "inşaat"
+
+
+def test_arabic_hundred_spellings_are_unified():
+    assert normalize("مائة", "ar") == normalize("مئة", "ar")
