@@ -328,3 +328,22 @@ async def test_deepgram_without_a_language_uses_multilingual_mode(tmp_path):
         await _voice(http, settings)
     assert seen["params"]["language"] == "multi"
     assert "detect_language" not in seen["params"]
+
+
+@pytest.mark.anyio
+async def test_deepgram_models_without_multilingual_mode_keep_language_detection(tmp_path):
+    seen = {}
+
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            seen["params"] = dict(request.url.params)
+            return _deepgram("hello")
+        return httpx.Response(200, json={"reply_text": ""})
+
+    settings = make_settings(
+        tmp_path, stt_provider="deepgram", deepgram_api_key="dg", deepgram_model="enhanced"
+    )
+    async with _client(handler) as http:
+        await _voice(http, settings)
+    assert seen["params"]["detect_language"] == "true"
+    assert "language" not in seen["params"]

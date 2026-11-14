@@ -134,9 +134,14 @@ async def _transcribe_deepgram(
 ) -> str:
     assert settings.deepgram_api_key is not None
     params = {"model": settings.deepgram_model, "smart_format": "true"}
-    # "multi" is Deepgram's language-agnostic mode; detect_language=true returned empty
-    # transcripts for most Arabic clips in bench/stt.
-    params["language"] = settings.stt_language or "multi"
+    if settings.stt_language:
+        params["language"] = settings.stt_language
+    elif settings.deepgram_model.startswith(("nova-2", "nova-3")):
+        # Multilingual mode, which covers Arabic; detect_language does not, and returned empty
+        # transcripts for most Arabic clips in bench/stt. Only Nova-2 and Nova-3 offer it.
+        params["language"] = "multi"
+    else:
+        params["detect_language"] = "true"
     response = await http.post(
         DEEPGRAM_LISTEN_URL,
         params=params,

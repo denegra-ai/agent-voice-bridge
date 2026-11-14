@@ -116,7 +116,7 @@ def bootstrap_wer(runs: list[dict], samples: int = 2000) -> tuple[float, float]:
 
 def paired_difference(
     a: list[dict], b: list[dict], samples: int = 2000
-) -> tuple[float, float, float]:
+) -> tuple[float, float, float] | None:
     """WER of a minus WER of b over clips both measured, with a 95% paired bootstrap interval."""
 
     def per_clip(runs: list[dict]) -> dict[str, tuple[float, int]]:
@@ -130,6 +130,8 @@ def paired_difference(
 
     ea, eb = per_clip(a), per_clip(b)
     clips = [(ea[c][0], eb[c][0], ea[c][1]) for c in sorted(ea.keys() & eb.keys())]
+    if not clips:
+        return None
 
     def diff(pick: list[tuple[float, float, int]]) -> float:
         words = sum(w for _, _, w in pick)
@@ -209,11 +211,17 @@ def main() -> None:
             f"{pct(pooled_wer(runs, skip))} |"
         )
     counts = {
-        lang: sum(1 for c in skip if references[c]["lang"] == lang) for lang in ("tr", "ar", "en")
+        lang: (
+            sum(1 for c in skip if references[c]["lang"] == lang),
+            sum(1 for c in references.values() if c["lang"] == lang),
+        )
+        for lang in ("tr", "ar", "en")
     }
     print(
         "\nNumber clips (a digit in the reference or in any transcript), left out of the last "
-        "column: " + ", ".join(f"{lang} {n} of 40" for lang, n in counts.items()) + "."
+        "column: "
+        + ", ".join(f"{lang} {n} of {total}" for lang, (n, total) in counts.items())
+        + "."
     )
 
     print(
@@ -228,7 +236,11 @@ def main() -> None:
         for i, a in enumerate(auto):
             for b in auto[i + 1 :]:
                 if (a, lang) in scores and (b, lang) in scores:
-                    d, low, high = paired_difference(scores[(a, lang)], scores[(b, lang)])
+                    result = paired_difference(scores[(a, lang)], scores[(b, lang)])
+                    if result is None:
+                        print(f"| {lang} | {a} | {b} | – | no clips measured by both |")
+                        continue
+                    d, low, high = result
                     interval = f"{100 * low:+.1f} to {100 * high:+.1f}"
                     print(f"| {lang} | {a} | {b} | {100 * d:+.1f} | {interval} |")
 
