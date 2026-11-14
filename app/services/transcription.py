@@ -122,7 +122,8 @@ async def _transcribe_elevenlabs(
 ) -> str:
     assert settings.elevenlabs_api_key is not None
     base_mime = mime_type.split(";")[0].strip().lower()
-    data = {"model_id": settings.elevenlabs_stt_model}
+    # Without this Scribe adds markers like "(laughter)" that the agent would read as speech.
+    data = {"model_id": settings.elevenlabs_stt_model, "tag_audio_events": "false"}
     if settings.stt_language:
         data["language_code"] = settings.stt_language
     response = await http.post(

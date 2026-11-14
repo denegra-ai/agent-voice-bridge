@@ -250,6 +250,11 @@ def main(
             problem = check(url, headers)
             print(f"  {'✗' if problem else '✓'} {label}" + (f": {problem}" if problem else ""))
             failed = failed or problem is not None
+        if (
+            values.get("STT_PROVIDER") == "elevenlabs"
+            and values.get("TTS_PROVIDER") != "elevenlabs"
+        ):
+            print("  ? ElevenLabs: not checked (a speech-to-text key is only testable with audio)")
         if failed and not wizard.yes("Some checks failed. Save anyway?", False):
             print("Nothing saved. Re-run to try again.")
             return 1
