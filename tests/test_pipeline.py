@@ -107,6 +107,34 @@ async def test_deepgram_transcription(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_elevenlabs_transcription(tmp_path):
+    seen = {}
+
+    def handler(request):
+        if request.url.host == "api.elevenlabs.io":
+            seen["key"] = request.headers["xi-api-key"]
+            seen["body"] = request.content
+            return httpx.Response(200, json={"language_code": "tur", "text": "merhaba"})
+        seen["agent"] = request.content
+        return httpx.Response(200, json={"reply_text": ""})
+
+    async def fetch_audio():
+        return b"ogg", "audio/ogg; codecs=opus"
+
+    settings = make_settings(
+        tmp_path, stt_provider="elevenlabs", stt_language="tr", elevenlabs_api_key="el"
+    )
+    async with _client(handler) as http:
+        await process_message(
+            http, settings, channel="meta", sender_id="1", fetch_audio=fetch_audio
+        )
+    assert seen["key"] == "el"
+    assert b'name="model_id"\r\n\r\nscribe_v2' in seen["body"]
+    assert b'name="language_code"\r\n\r\ntr' in seen["body"]
+    assert b'"content":"merhaba"' in seen["agent"]
+
+
+@pytest.mark.anyio
 async def test_azure_openai_stt_and_tts(tmp_path):
     seen = []
 

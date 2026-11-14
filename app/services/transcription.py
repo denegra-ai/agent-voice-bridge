@@ -9,6 +9,7 @@ from app.config import Settings, openai_audio_target
 logger = logging.getLogger(__name__)
 
 DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
+ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text"
 STT_TIMEOUT_SECONDS = 60.0
 
 # Twilio can answer 404 for a few seconds after the webhook, until the voice note is stored.
@@ -55,6 +56,8 @@ async def transcribe(
     started = time.perf_counter()
     if settings.stt_provider == "deepgram":
         text = await _transcribe_deepgram(http, settings, audio, mime_type)
+    elif settings.stt_provider == "elevenlabs":
+        text = await _transcribe_elevenlabs(http, settings, audio, mime_type)
     else:
         text = await _transcribe_openai(http, settings, audio, mime_type)
     logger.info(
@@ -112,3 +115,25 @@ async def _transcribe_deepgram(
         return str(response.json()["results"]["channels"][0]["alternatives"][0]["transcript"])
     except (KeyError, IndexError, TypeError) as exc:
         raise ValueError("Unexpected Deepgram response shape") from exc
+
+
+async def _transcribe_elevenlabs(
+    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
+) -> str:
+    assert settings.elevenlabs_api_key is not None
+    base_mime = mime_type.split(";")[0].strip().lower()
+    data = {"model_id": settings.elevenlabs_stt_model}
+    if settings.stt_language:
+        data["language_code"] = settings.stt_language
+    response = await http.post(
+        ELEVENLABS_STT_URL,
+        headers={"xi-api-key": settings.elevenlabs_api_key.get_secret_value()},
+        data=data,
+        files={"file": (f"audio.{_EXTENSIONS.get(base_mime, 'ogg')}", audio, base_mime)},
+        timeout=STT_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    try:
+        return str(response.json()["text"])
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Unexpected ElevenLabs response shape") from exc
