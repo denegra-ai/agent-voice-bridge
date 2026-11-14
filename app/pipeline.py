@@ -56,7 +56,15 @@ async def process_message(
             content, message_type = (text or "").strip(), "text"
 
         if not content:
-            logger.info("Empty %s message from %s; nothing to send", message_type, channel)
+            if message_type == "voice":
+                # The user spoke and waits for an answer; silence would look like being ignored.
+                logger.warning("Voice note from %s transcribed to empty text", channel)
+                return (
+                    Reply(text=settings.fallback_reply_text)
+                    if settings.fallback_reply_text
+                    else None
+                )
+            logger.info("Empty text message from %s; nothing to send", channel)
             return None
 
         reply_text = await ask_agent(

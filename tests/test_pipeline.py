@@ -194,3 +194,105 @@ async def test_azure_openai_stt_and_tts(tmp_path):
 def test_azure_provider_requires_endpoint_and_key(tmp_path):
     with pytest.raises(ValueError, match="AZURE_OPENAI_ENDPOINT.*AZURE_OPENAI_API_KEY"):
         make_settings(tmp_path, stt_provider="azure")
+
+
+def _deepgram(transcript: str) -> httpx.Response:
+    body = {"results": {"channels": [{"alternatives": [{"transcript": transcript}]}]}}
+    return httpx.Response(200, json=body)
+
+
+def _fallback_settings(tmp_path, **overrides):
+    return make_settings(
+        tmp_path,
+        stt_provider="deepgram",
+        deepgram_api_key="dg",
+        stt_fallback_provider="openai",
+        **overrides,
+    )
+
+
+async def _voice(http, settings):
+    async def fetch_audio():
+        return b"ogg", "audio/ogg"
+
+    return await process_message(
+        http, settings, channel="meta", sender_id="1", fetch_audio=fetch_audio
+    )
+
+
+@pytest.mark.anyio
+async def test_empty_transcript_is_retried_with_the_fallback_provider(tmp_path):
+    seen = {}
+
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            return _deepgram("")
+        if request.url.path == "/v1/audio/transcriptions":
+            seen["model"] = _multipart_fields(request.headers["Content-Type"], request.content)
+            return httpx.Response(200, json={"text": "merhaba"})
+        if request.url.path == "/v1/audio/speech":
+            return httpx.Response(500)
+        seen["agent"] = request.content
+        return httpx.Response(200, json={"reply_text": "selam"})
+
+    async with _client(handler) as http:
+        reply = await _voice(http, _fallback_settings(tmp_path))
+    assert seen["model"]["model"] == "gpt-4o-transcribe"
+    assert b'"content":"merhaba"' in seen["agent"]
+    assert reply == Reply(text="selam")
+
+
+@pytest.mark.anyio
+async def test_failed_transcription_is_retried_with_the_fallback_provider(tmp_path):
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            return httpx.Response(503)
+        if request.url.path == "/v1/audio/transcriptions":
+            return httpx.Response(200, json={"text": "merhaba"})
+        if request.url.path == "/v1/audio/speech":
+            return httpx.Response(500)
+        return httpx.Response(200, json={"reply_text": "selam"})
+
+    async with _client(handler) as http:
+        reply = await _voice(http, _fallback_settings(tmp_path))
+    assert reply == Reply(text="selam")
+
+
+@pytest.mark.anyio
+async def test_fallback_provider_is_not_called_when_the_primary_hears_speech(tmp_path):
+    hosts = []
+
+    def handler(request):
+        hosts.append(request.url.path)
+        if request.url.host == "api.deepgram.com":
+            return _deepgram("merhaba")
+        return httpx.Response(200, json={"reply_text": ""})
+
+    async with _client(handler) as http:
+        await _voice(http, _fallback_settings(tmp_path))
+    assert "/v1/audio/transcriptions" not in hosts
+
+
+@pytest.mark.anyio
+async def test_voice_note_heard_as_nothing_gets_the_fallback_reply(tmp_path):
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            return _deepgram("")
+        if request.url.path == "/v1/audio/transcriptions":
+            return httpx.Response(200, json={"text": "  "})
+        raise AssertionError("the agent must not be called with an empty message")
+
+    settings = _fallback_settings(tmp_path, fallback_reply_text="Sorry, I couldn't hear that.")
+    async with _client(handler) as http:
+        reply = await _voice(http, settings)
+    assert reply == Reply(text="Sorry, I couldn't hear that.")
+
+
+def test_fallback_provider_needs_its_own_key(tmp_path):
+    with pytest.raises(ValueError, match="DEEPGRAM_API_KEY"):
+        make_settings(tmp_path, stt_fallback_provider="deepgram")
+
+
+def test_fallback_provider_must_differ_from_the_primary(tmp_path):
+    with pytest.raises(ValueError, match="must differ"):
+        make_settings(tmp_path, stt_fallback_provider="openai")

@@ -53,28 +53,50 @@ async def download_media(
 async def transcribe(
     http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
 ) -> str:
+    """Transcribe with STT_PROVIDER; on an error or an empty transcript, try STT_FALLBACK_PROVIDER.
+
+    An empty transcript is treated like a failure because auto-detection can silently return
+    nothing (bench/stt: Deepgram heard most Arabic clips as English and returned "").
+    """
+    fallback = settings.stt_fallback_provider
+    try:
+        text = await _transcribe_once(http, settings, settings.stt_provider, audio, mime_type)
+    except (httpx.HTTPError, ValueError):
+        if fallback is None:
+            raise
+        logger.warning(
+            "Transcription via %s failed; trying %s", settings.stt_provider, fallback, exc_info=True
+        )
+        return await _transcribe_once(http, settings, fallback, audio, mime_type)
+    if text or fallback is None:
+        return text
+    logger.warning("Empty transcript from %s; trying %s", settings.stt_provider, fallback)
+    return await _transcribe_once(http, settings, fallback, audio, mime_type)
+
+
+async def _transcribe_once(
+    http: httpx.AsyncClient, settings: Settings, provider: str, audio: bytes, mime_type: str
+) -> str:
     started = time.perf_counter()
-    if settings.stt_provider == "deepgram":
+    if provider == "deepgram":
         text = await _transcribe_deepgram(http, settings, audio, mime_type)
-    elif settings.stt_provider == "elevenlabs":
+    elif provider == "elevenlabs":
         text = await _transcribe_elevenlabs(http, settings, audio, mime_type)
     else:
-        text = await _transcribe_openai(http, settings, audio, mime_type)
+        text = await _transcribe_openai(http, settings, audio, mime_type, azure=provider == "azure")
     logger.info(
         "Transcribed %d bytes via %s in %.0f ms",
         len(audio),
-        settings.stt_provider,
+        provider,
         (time.perf_counter() - started) * 1000,
     )
     return text.strip()
 
 
 async def _transcribe_openai(
-    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str
+    http: httpx.AsyncClient, settings: Settings, audio: bytes, mime_type: str, *, azure: bool
 ) -> str:
-    url, headers, model = openai_audio_target(
-        settings, "transcriptions", azure=settings.stt_provider == "azure"
-    )
+    url, headers, model = openai_audio_target(settings, "transcriptions", azure=azure)
     base_mime = mime_type.split(";")[0].strip().lower()
     filename = f"audio.{_EXTENSIONS.get(base_mime, 'ogg')}"
     data = {"model": model}

@@ -30,7 +30,7 @@ download, speech-to-text, text-to-speech, and delivery.
 flowchart LR
     U([User on WhatsApp]) -- voice note / text --> P{{Meta Cloud API<br/>or Twilio}}
     P -- webhook --> B[agent-voice-bridge]
-    B -- "voice: download + transcribe" --> STT[(Whisper / Azure OpenAI / Deepgram / ElevenLabs)]
+    B -- "voice: download + transcribe" --> STT[(OpenAI / Azure OpenAI / Deepgram / ElevenLabs)]
     B -- "POST {sender_id, message_type, content, channel}" --> A[Your agent<br/>AGENT_WEBHOOK_URL]
     A -- "{reply_text}" --> B
     B -- "voice: synthesize" --> TTS[(OpenAI / Azure OpenAI / ElevenLabs)]
@@ -127,7 +127,7 @@ service refuses to start and names the missing variable if something required is
 ```bash
 docker compose up -d --build
 ngrok http 8000
-curl http://localhost:8000/health   # {"status":"ok","version":"0.1.2","channels":["meta"]}
+curl http://localhost:8000/health   # {"status":"ok","version":"0.1.3","channels":["meta"]}
 ```
 
 **3. Point the channel at the bridge**
@@ -159,7 +159,8 @@ Every option is documented in [`.env.example`](.env.example). The most important
 |---|---|---|
 | `AGENT_WEBHOOK_URL` | — | Your agent endpoint (required) |
 | `PUBLIC_BASE_URL` | — | Public HTTPS URL of this service (required) |
-| `STT_PROVIDER` | `openai` | `openai` (Whisper), `azure` (Azure OpenAI), `deepgram` or `elevenlabs` (Scribe) |
+| `STT_PROVIDER` | `openai` | `openai` (gpt-4o-transcribe), `azure` (Azure OpenAI), `deepgram` or `elevenlabs` (Scribe) |
+| `STT_FALLBACK_PROVIDER` | empty | Second provider, tried when the first fails or hears nothing |
 | `TTS_PROVIDER` | `openai` | `openai` / `azure` (Ogg/Opus voice note) or `elevenlabs` (MP3) |
 | `AGENT_TIMEOUT_SECONDS` | `30` | Per-attempt agent timeout |
 | `AGENT_MAX_RETRIES` | `2` | Retries on connect errors and 429/502/503/504 |
@@ -171,6 +172,10 @@ Every option is documented in [`.env.example`](.env.example). The most important
 - **Security.** Meta requests are checked against `X-Hub-Signature-256` (`META_APP_SECRET`),
   Twilio requests against `X-Twilio-Signature` (`TWILIO_AUTH_TOKEN` + `PUBLIC_BASE_URL`).
   Unsigned or mis-signed requests get `403`. Message content is never logged.
+- **No silent drops.** A voice note that comes back as an empty transcript is retried with
+  `STT_FALLBACK_PROVIDER`, and if it is still empty the user gets `FALLBACK_REPLY_TEXT` instead
+  of silence. Which provider to pick: see the [speech-to-text benchmark](bench/stt/) on
+  Turkish, Arabic and English voice notes.
 - **Generated audio** is public at an unguessable URL (`/static/audio/<uuid>.ogg`) so the
   provider can fetch it, and is deleted after `AUDIO_TTL_SECONDS`.
 - **Retries.** The agent call is retried only when the agent cannot have processed the
