@@ -4,7 +4,7 @@ import time
 
 import httpx
 
-from app.config import Settings, openai_audio_target
+from app.config import Settings, SttProvider, openai_audio_target
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +61,23 @@ async def transcribe(
     fallback = settings.stt_fallback_provider
     try:
         text = await _transcribe_once(http, settings, settings.stt_provider, audio, mime_type)
-    except (httpx.HTTPError, ValueError):
+    except (httpx.HTTPError, ValueError) as exc:
         if fallback is None:
             raise
-        logger.warning(
-            "Transcription via %s failed; trying %s", settings.stt_provider, fallback, exc_info=True
+        # A 4xx other than 408/429 means the primary is misconfigured (key, model, deployment);
+        # the fallback keeps users answered, so make sure the broken primary still gets noticed.
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        level = (
+            logging.ERROR
+            if status and 400 <= status < 500 and status not in (408, 429)
+            else logging.WARNING
+        )
+        logger.log(
+            level,
+            "Transcription via %s failed; trying %s",
+            settings.stt_provider,
+            fallback,
+            exc_info=True,
         )
         return await _transcribe_once(http, settings, fallback, audio, mime_type)
     if text or fallback is None:
@@ -75,7 +87,11 @@ async def transcribe(
 
 
 async def _transcribe_once(
-    http: httpx.AsyncClient, settings: Settings, provider: str, audio: bytes, mime_type: str
+    http: httpx.AsyncClient,
+    settings: Settings,
+    provider: SttProvider,
+    audio: bytes,
+    mime_type: str,
 ) -> str:
     started = time.perf_counter()
     if provider == "deepgram":

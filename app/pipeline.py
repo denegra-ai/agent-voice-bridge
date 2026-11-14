@@ -47,6 +47,9 @@ async def process_message(
     text: str | None = None,
     fetch_audio: AudioFetcher | None = None,
 ) -> Reply | None:
+    fallback_reply = (
+        Reply(text=settings.fallback_reply_text) if settings.fallback_reply_text else None
+    )
     try:
         if fetch_audio is not None:
             audio, mime_type = await fetch_audio()
@@ -59,11 +62,7 @@ async def process_message(
             if message_type == "voice":
                 # The user spoke and waits for an answer; silence would look like being ignored.
                 logger.warning("Voice note from %s transcribed to empty text", channel)
-                return (
-                    Reply(text=settings.fallback_reply_text)
-                    if settings.fallback_reply_text
-                    else None
-                )
+                return fallback_reply
             logger.info("Empty text message from %s; nothing to send", channel)
             return None
 
@@ -76,7 +75,7 @@ async def process_message(
         )
     except (httpx.HTTPError, ValueError, ValidationError):
         logger.exception("Pipeline failed for %s message", channel)
-        return Reply(text=settings.fallback_reply_text) if settings.fallback_reply_text else None
+        return fallback_reply
 
     if not reply_text.strip():
         return None

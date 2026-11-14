@@ -36,6 +36,7 @@ def make_settings(provider: str, language: str | None) -> Settings:
         tts_provider="elevenlabs",
         elevenlabs_voice_id="benchmark",
         stt_provider=provider,
+        stt_fallback_provider=None,  # measure the provider alone, whatever .env says
         stt_language=language,
         **placeholders,
     )

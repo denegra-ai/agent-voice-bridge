@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import AnyHttpUrl, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SttProvider = Literal["openai", "azure", "deepgram", "elevenlabs"]
+
 
 class Settings(BaseSettings):
     # env_ignore_empty: "META_ACCESS_TOKEN=" in .env means unset, not an empty token.
@@ -31,9 +33,9 @@ class Settings(BaseSettings):
     twilio_auth_token: SecretStr | None = None
 
     # Speech-to-text
-    stt_provider: Literal["openai", "azure", "deepgram", "elevenlabs"] = "openai"
+    stt_provider: SttProvider = "openai"
     # Tried when the primary provider fails or hears nothing, so a voice note is never dropped.
-    stt_fallback_provider: Literal["openai", "azure", "deepgram", "elevenlabs"] | None = None
+    stt_fallback_provider: SttProvider | None = None
     stt_language: str | None = None
     openai_api_key: SecretStr | None = None
     openai_stt_model: str = "gpt-4o-transcribe"

@@ -123,3 +123,28 @@ def test_elevenlabs_speech_to_text_key_is_flagged_as_unchecked(tmp_path, capsys)
     assert values["ELEVENLABS_VOICE_ID"] == ""
     assert not any("elevenlabs" in url for url in checked)
     assert "ElevenLabs: not checked" in capsys.readouterr().out
+
+
+def test_hand_set_fallback_provider_key_is_asked_and_checked(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "AGENT_WEBHOOK_URL=https://agent.example.com/hook\n"
+        "PUBLIC_BASE_URL=https://bridge.example.com\n"
+        "TWILIO_ACCOUNT_SID=AC123\nTWILIO_AUTH_TOKEN=tw\n"
+        "STT_PROVIDER=openai\nTTS_PROVIDER=openai\nOPENAI_API_KEY=sk-old\n"
+        "STT_FALLBACK_PROVIDER=deepgram\n"
+    )
+    ask, plain = _scripted(["y", "", "", "n", "y", "", "", "", "y"])
+    secret, secrets_left = _scripted(["", "", "", "dg-key"])  # agent, twilio, openai, deepgram
+    checked = []
+
+    def check(url, headers):
+        checked.append(url)
+        return None
+
+    assert configure.main(ask, secret, check, env_file) == 0
+    assert plain == [] and secrets_left == []
+    values = configure.read_env(env_file)
+    assert values["STT_FALLBACK_PROVIDER"] == "deepgram"
+    assert values["DEEPGRAM_API_KEY"] == "dg-key"
+    assert "https://api.deepgram.com/v1/projects" in checked

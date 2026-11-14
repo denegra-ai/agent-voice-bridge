@@ -260,17 +260,17 @@ async def test_failed_transcription_is_retried_with_the_fallback_provider(tmp_pa
 
 @pytest.mark.anyio
 async def test_fallback_provider_is_not_called_when_the_primary_hears_speech(tmp_path):
-    hosts = []
+    paths = []
 
     def handler(request):
-        hosts.append(request.url.path)
+        paths.append(request.url.path)
         if request.url.host == "api.deepgram.com":
             return _deepgram("merhaba")
         return httpx.Response(200, json={"reply_text": ""})
 
     async with _client(handler) as http:
         await _voice(http, _fallback_settings(tmp_path))
-    assert "/v1/audio/transcriptions" not in hosts
+    assert "/v1/audio/transcriptions" not in paths
 
 
 @pytest.mark.anyio
@@ -296,3 +296,18 @@ def test_fallback_provider_needs_its_own_key(tmp_path):
 def test_fallback_provider_must_differ_from_the_primary(tmp_path):
     with pytest.raises(ValueError, match="must differ"):
         make_settings(tmp_path, stt_fallback_provider="openai")
+
+
+@pytest.mark.anyio
+async def test_misconfigured_primary_is_logged_as_an_error(tmp_path, caplog):
+    def handler(request):
+        if request.url.host == "api.deepgram.com":
+            return httpx.Response(401)
+        if request.url.path == "/v1/audio/transcriptions":
+            return httpx.Response(200, json={"text": "merhaba"})
+        return httpx.Response(200, json={"reply_text": ""})
+
+    async with _client(handler) as http:
+        await _voice(http, _fallback_settings(tmp_path))
+    failed = [r for r in caplog.records if "Transcription via deepgram failed" in r.message]
+    assert [r.levelname for r in failed] == ["ERROR"]
