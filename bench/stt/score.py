@@ -54,7 +54,11 @@ def score_file(path: Path, references: dict[str, dict]) -> dict:
         raise SystemExit(f"{path}: no rows")
     by_lang: dict[str, dict] = defaultdict(lambda: defaultdict(list))
     for row in rows:
-        clip = references[row["id"]]
+        clip = references.get(row["id"])
+        if clip is None:
+            raise SystemExit(
+                f"{path}: clip {row['id']} is not in data/manifest.jsonl; re-run prepare.py"
+            )
         bucket = by_lang[clip["lang"]]
         bucket["status"].append(row["status"])
         if row["status"] != "ok":
@@ -119,23 +123,29 @@ def main() -> None:
 
     print(
         "| Provider | Lang | Runs | WER (mean, range) | 95% CI | CER | p50 / p95 latency "
-        "| Not measured |"
+        "| Not measured | Errors |"
     )
-    print("|---|---|---|---|---|---|---|---|")
+    print("|---|---|---|---|---|---|---|---|---|")
     for (provider, lang), runs in sorted(scores.items(), key=lambda kv: (kv[0][1], kv[0][0])):
         wers = [r["wer"] for r in runs if r["wer"] is not None]
         cers = [r["cer"] for r in runs if r["cer"] is not None]
         wer = pct(statistics.mean(wers)) if wers else "–"
         spread = f" ({pct(min(wers))}–{pct(max(wers))})" if len(wers) > 1 else ""
-        p50 = statistics.median(r["p50_ms"] for r in runs if r["p50_ms"] is not None)
-        p95 = statistics.median(r["p95_ms"] for r in runs if r["p95_ms"] is not None)
-        missing = sum(r["not_measured"] + r["error"] for r in runs)
+        p50s = [r["p50_ms"] for r in runs if r["p50_ms"] is not None]
+        p95s = [r["p95_ms"] for r in runs if r["p95_ms"] is not None]
+        latency = (
+            f"{statistics.median(p50s) / 1000:.1f}s / {statistics.median(p95s) / 1000:.1f}s"
+            if p50s
+            else "–"
+        )
+        not_measured = sum(r["not_measured"] for r in runs)
+        errors = sum(r["error"] for r in runs)
         total = sum(r["clips"] for r in runs)
         low, high = bootstrap_wer(runs) if wers else (None, None)
         print(
             f"| {provider} | {lang} | {len(runs)} | {wer}{spread} | {pct(low)}–{pct(high)} | "
             f"{pct(statistics.mean(cers)) if cers else '–'} | "
-            f"{p50 / 1000:.1f}s / {p95 / 1000:.1f}s | {missing} of {total} |"
+            f"{latency} | {not_measured} of {total} | {errors} of {total} |"
         )
 
 

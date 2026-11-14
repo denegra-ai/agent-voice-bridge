@@ -1,7 +1,7 @@
 """Send every benchmark clip through the bridge's own transcribe() and record the result.
 
-    .venv/bin/python bench/stt/run.py --provider deepgram --run 1
-    .venv/bin/python bench/stt/run.py --provider azure --run 1 --min-interval 21
+    .venv/bin/python -m bench.stt.run --provider deepgram --run 1
+    .venv/bin/python -m bench.stt.run --provider azure --run 1 --min-interval 21
 
 Credentials come from the environment or .env, exactly as the bridge reads them
 (DEEPGRAM_API_KEY; AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY, AZURE_OPENAI_STT_DEPLOYMENT;
@@ -62,6 +62,8 @@ async def transcribe_clip(http: httpx.AsyncClient, settings: Settings, audio: by
                 return {"status": status, "attempts": attempts, "detail": f"HTTP {code}"}
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             return {"status": "not_measured", "attempts": attempts, "detail": type(exc).__name__}
+        except ValueError as exc:
+            return {"status": "error", "attempts": attempts, "detail": str(exc)}
         await asyncio.sleep(wait)
     raise AssertionError("the last attempt always returns")
 

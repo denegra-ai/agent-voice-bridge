@@ -1,7 +1,7 @@
 # Speech-to-text on WhatsApp voice notes: Turkish, Arabic, English
 
 Which speech-to-text service should a WhatsApp agent use? We sent 120 voice notes in Turkish,
-Arabic and English through the bridge's own `transcribe()` code, with seven models from four
+Arabic and English through the bridge's own `transcribe()` code, with six models from three
 providers, and measured word error rate (WER), speed and cost. Everything here is reproducible
 with the scripts in this folder.
 
@@ -17,7 +17,7 @@ WER is better. Each cell is the mean of two runs; the 95% interval comes from re
 | OpenAI gpt-4o-transcribe (Azure) | **3.1%** (1.9–4.3) | **3.7%** (1.9–6.1) | 3.2% (2.0–4.6) | 0.8 s | ≈ $0.0060 ¹ |
 | ElevenLabs Scribe v2 | 3.2% (1.9–4.6) | 3.8% (1.7–6.4) | 3.5% (2.1–5.1) | 0.7 s | $0.0033 |
 | OpenAI gpt-transcribe (Azure) | 4.0% (2.5–5.5) | 4.1% (2.2–6.5) | **2.9%** (1.9–4.2) | 0.8 s | $0.0045 |
-| OpenAI gpt-4o-mini-transcribe (Azure) | 5.1% | 6.6% | 3.5% | 0.7 s | ≈ $0.0030 ¹ |
+| OpenAI gpt-4o-mini-transcribe (Azure) | 5.1% (3.1–7.6) | 6.6% (4.3–9.1) | 3.5% (2.2–4.8) | 0.7 s | ≈ $0.0030 ¹ |
 | OpenAI Whisper (Azure) | 6.8% (4.7–9.1) | 7.8% (5.6–10.2) | 4.1% (2.6–5.7) | 1.6 s | $0.0066 ² |
 | Deepgram Nova-3 | 8.7% (5.1–13.0) | **104.6%** ³ | 10.3% (5.3–17.5) | 0.4 s | $0.0052 ⁴ |
 
@@ -99,7 +99,7 @@ AZURE_OPENAI_STT_DEPLOYMENT=my-gpt-4o-transcribe \
 ```
 
 Keys are read from the environment or `.env`, the same way the bridge reads them. Running all
-seven models twice, with and without hints (about 86 audio minutes each), costs about $2.50 at
+six models twice, with and without hints (about 86 audio minutes each), costs about $2.50 at
 list prices.
 
 Audio and reference transcripts: Google FLEURS, licensed
