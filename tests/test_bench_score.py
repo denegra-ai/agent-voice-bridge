@@ -25,3 +25,11 @@ def test_arabic_ta_marbuta_and_arabic_indic_digits_are_normalized():
 
 def test_turkish_circumflex_is_optional():
     assert normalize("hâlâ", "tr") == normalize("hala", "tr")
+
+
+def test_turkish_combining_dot_above_is_removed():
+    assert normalize("i̇nşaat", "tr") == normalize("İnşaat", "tr") == "inşaat"
+
+
+def test_arabic_hundred_spellings_are_unified():
+    assert normalize("مائة", "ar") == normalize("مئة", "ar")

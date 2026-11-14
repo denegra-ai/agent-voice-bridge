@@ -28,13 +28,15 @@ TURKISH_CIRCUMFLEX = str.maketrans("âîû", "aiu")
 def normalize(text: str, lang: str) -> str:
     text = unicodedata.normalize("NFKC", text).translate(DIGITS)
     if lang == "tr":
-        # Python's lower() maps I to i; Turkish needs I -> ı and İ -> i.
-        text = text.replace("I", "ı").replace("İ", "i")
+        # Python's lower() maps I to i; Turkish needs I -> ı and İ -> i. FLEURS also writes İ as
+        # i + combining dot above (U+0307), which NFKC keeps.
+        text = text.replace("I", "ı").replace("İ", "i").replace("\u0307", "")
     text = text.lower()
     if lang == "tr":
         text = text.translate(TURKISH_CIRCUMFLEX)
     if lang == "ar":
-        text = ARABIC_MARKS.sub("", text).translate(ARABIC_LETTERS)
+        # مائة and مئة are both standard spellings of "hundred".
+        text = ARABIC_MARKS.sub("", text).translate(ARABIC_LETTERS).replace("مائه", "مئه")
     text = text.replace("'", "").replace("’", "")
     text = "".join(" " if unicodedata.category(ch)[0] in "PS" else ch for ch in text)
     return " ".join(text.split())
@@ -112,6 +114,32 @@ def bootstrap_wer(runs: list[dict], samples: int = 2000) -> tuple[float, float]:
     return wers[int(0.025 * samples)], wers[int(0.975 * samples) - 1]
 
 
+def paired_difference(
+    a: list[dict], b: list[dict], samples: int = 2000
+) -> tuple[float, float, float]:
+    """WER of a minus WER of b over clips both measured, with a 95% paired bootstrap interval."""
+
+    def per_clip(runs: list[dict]) -> dict[str, tuple[float, int]]:
+        edits: dict[str, list[int]] = defaultdict(list)
+        words: dict[str, int] = {}
+        for run in runs:
+            for clip_id, clip_edits, clip_words in run["per_clip"]:
+                edits[clip_id].append(clip_edits)
+                words[clip_id] = clip_words
+        return {c: (statistics.mean(e), words[c]) for c, e in edits.items()}
+
+    ea, eb = per_clip(a), per_clip(b)
+    clips = [(ea[c][0], eb[c][0], ea[c][1]) for c in sorted(ea.keys() & eb.keys())]
+
+    def diff(pick: list[tuple[float, float, int]]) -> float:
+        words = sum(w for _, _, w in pick)
+        return (sum(x for x, _, _ in pick) - sum(y for _, y, _ in pick)) / words
+
+    rng = random.Random(0)
+    diffs = sorted(diff(rng.choices(clips, k=len(clips))) for _ in range(samples))
+    return diff(clips), diffs[int(0.025 * samples)], diffs[int(0.975 * samples) - 1]
+
+
 def number_clips(paths: list[Path], references: dict[str, dict]) -> set[str]:
     """Clips where the reference or any transcript has a digit.
 
@@ -187,6 +215,22 @@ def main() -> None:
         "\nNumber clips (a digit in the reference or in any transcript), left out of the last "
         "column: " + ", ".join(f"{lang} {n} of 40" for lang, n in counts.items()) + "."
     )
+
+    print(
+        "\n## Paired differences (auto-detect)\n\n"
+        "WER of A minus WER of B on the same clips, in points, with a 95% paired bootstrap "
+        "interval. An interval that includes 0 means 40 clips can't tell A and B apart.\n"
+    )
+    print("| Lang | A | B | A − B | 95% CI |")
+    print("|---|---|---|---|---|")
+    auto = sorted({p for p, _ in scores if "+hint" not in p})
+    for lang in ("tr", "ar", "en"):
+        for i, a in enumerate(auto):
+            for b in auto[i + 1 :]:
+                if (a, lang) in scores and (b, lang) in scores:
+                    d, low, high = paired_difference(scores[(a, lang)], scores[(b, lang)])
+                    interval = f"{100 * low:+.1f} to {100 * high:+.1f}"
+                    print(f"| {lang} | {a} | {b} | {100 * d:+.1f} | {interval} |")
 
 
 if __name__ == "__main__":
