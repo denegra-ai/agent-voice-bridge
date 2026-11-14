@@ -92,3 +92,34 @@ def test_failed_check_does_not_save_by_default(tmp_path):
 
     assert configure.main(ask, secret, lambda u, h: "HTTP 401 (wrong key?)", env_file) == 1
     assert not env_file.exists()
+
+
+def test_elevenlabs_speech_to_text_key_is_flagged_as_unchecked(tmp_path, capsys):
+    env_file = tmp_path / ".env"
+    ask, plain = _scripted(
+        [
+            "https://agent.example.com/hook",  # agent URL
+            "https://bridge.example.com",  # public URL
+            "n",  # Meta
+            "y",  # Twilio
+            "AC123",  # Twilio SID
+            "elevenlabs",  # STT
+            "openai",  # TTS
+            "y",  # run checks
+        ]
+    )
+    secret, secrets_left = _scripted(["", "tw-token", "sk-test", "el-key"])
+    checked = []
+
+    def check(url, headers):
+        checked.append(url)
+        return None
+
+    assert configure.main(ask, secret, check, env_file) == 0
+    assert plain == [] and secrets_left == []
+    values = configure.read_env(env_file)
+    assert values["STT_PROVIDER"] == "elevenlabs"
+    assert values["ELEVENLABS_API_KEY"] == "el-key"
+    assert values["ELEVENLABS_VOICE_ID"] == ""
+    assert not any("elevenlabs" in url for url in checked)
+    assert "ElevenLabs: not checked" in capsys.readouterr().out

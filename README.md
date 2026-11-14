@@ -30,7 +30,7 @@ download, speech-to-text, text-to-speech, and delivery.
 flowchart LR
     U([User on WhatsApp]) -- voice note / text --> P{{Meta Cloud API<br/>or Twilio}}
     P -- webhook --> B[agent-voice-bridge]
-    B -- "voice: download + transcribe" --> STT[(Whisper / Azure OpenAI / Deepgram)]
+    B -- "voice: download + transcribe" --> STT[(Whisper / Azure OpenAI / Deepgram / ElevenLabs)]
     B -- "POST {sender_id, message_type, content, channel}" --> A[Your agent<br/>AGENT_WEBHOOK_URL]
     A -- "{reply_text}" --> B
     B -- "voice: synthesize" --> TTS[(OpenAI / Azure OpenAI / ElevenLabs)]
@@ -159,7 +159,7 @@ Every option is documented in [`.env.example`](.env.example). The most important
 |---|---|---|
 | `AGENT_WEBHOOK_URL` | — | Your agent endpoint (required) |
 | `PUBLIC_BASE_URL` | — | Public HTTPS URL of this service (required) |
-| `STT_PROVIDER` | `openai` | `openai` (Whisper), `azure` (Azure OpenAI) or `deepgram` |
+| `STT_PROVIDER` | `openai` | `openai` (Whisper), `azure` (Azure OpenAI), `deepgram` or `elevenlabs` (Scribe) |
 | `TTS_PROVIDER` | `openai` | `openai` / `azure` (Ogg/Opus voice note) or `elevenlabs` (MP3) |
 | `AGENT_TIMEOUT_SECONDS` | `30` | Per-attempt agent timeout |
 | `AGENT_MAX_RETRIES` | `2` | Retries on connect errors and 429/502/503/504 |

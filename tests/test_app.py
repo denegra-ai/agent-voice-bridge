@@ -30,6 +30,13 @@ def test_elevenlabs_requires_voice_id(tmp_path):
         make_settings(tmp_path, tts_provider="elevenlabs", elevenlabs_api_key="el")
 
 
+def test_elevenlabs_speech_to_text_needs_only_the_key(tmp_path):
+    settings = make_settings(tmp_path, stt_provider="elevenlabs", elevenlabs_api_key="el")
+    assert settings.stt_provider == "elevenlabs"
+    with pytest.raises(ValidationError, match="ELEVENLABS_API_KEY"):
+        make_settings(tmp_path, stt_provider="elevenlabs")
+
+
 def test_empty_env_value_means_unset(monkeypatch):
     for name, value in {
         "AGENT_WEBHOOK_URL": "https://agent.test/agent",

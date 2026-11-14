@@ -1,3 +1,6 @@
+from email.parser import BytesParser
+from email.policy import HTTP
+
 import httpx
 import pytest
 
@@ -104,6 +107,48 @@ async def test_deepgram_transcription(tmp_path):
         )
     assert seen["auth"] == "Token dg"
     assert reply is None  # empty reply_text means nothing is sent
+
+
+def _multipart_fields(content_type: str, body: bytes) -> dict[str, str]:
+    message = BytesParser(policy=HTTP).parsebytes(
+        f"Content-Type: {content_type}\r\n\r\n".encode() + body
+    )
+    return {
+        part.get_param("name", header="content-disposition"): part.get_content()
+        for part in message.iter_parts()
+        if part.get_filename() is None
+    }
+
+
+@pytest.mark.anyio
+async def test_elevenlabs_transcription(tmp_path):
+    seen = {}
+
+    def handler(request):
+        if request.url.host == "api.elevenlabs.io":
+            seen["key"] = request.headers["xi-api-key"]
+            seen["body"] = request.content
+            seen["content_type"] = request.headers["Content-Type"]
+            return httpx.Response(200, json={"language_code": "tur", "text": "merhaba"})
+        seen["agent"] = request.content
+        return httpx.Response(200, json={"reply_text": ""})
+
+    async def fetch_audio():
+        return b"ogg", "audio/ogg; codecs=opus"
+
+    settings = make_settings(
+        tmp_path, stt_provider="elevenlabs", stt_language="tr", elevenlabs_api_key="el"
+    )
+    async with _client(handler) as http:
+        await process_message(
+            http, settings, channel="meta", sender_id="1", fetch_audio=fetch_audio
+        )
+    assert seen["key"] == "el"
+    form = _multipart_fields(seen["content_type"], seen["body"])
+    assert form["model_id"] == "scribe_v2"
+    assert form["language_code"] == "tr"
+    assert form["tag_audio_events"] == "false"
+    assert b'"content":"merhaba"' in seen["agent"]
 
 
 @pytest.mark.anyio

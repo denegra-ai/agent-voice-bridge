@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     twilio_auth_token: SecretStr | None = None
 
     # Speech-to-text
-    stt_provider: Literal["openai", "azure", "deepgram"] = "openai"
+    stt_provider: Literal["openai", "azure", "deepgram", "elevenlabs"] = "openai"
     stt_language: str | None = None
     openai_api_key: SecretStr | None = None
     openai_stt_model: str = "whisper-1"
@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     elevenlabs_api_key: SecretStr | None = None
     elevenlabs_voice_id: str | None = None
     elevenlabs_model_id: str = "eleven_multilingual_v2"
+    elevenlabs_stt_model: str = "scribe_v2"
 
     # Runtime
     audio_dir: Path = Path("data/audio")
@@ -89,11 +90,11 @@ class Settings(BaseSettings):
             missing.append("DEEPGRAM_API_KEY (STT_PROVIDER=deepgram)")
         if self.tts_provider == "openai" and self.openai_api_key is None:
             missing.append("OPENAI_API_KEY (TTS_PROVIDER=openai)")
-        if self.tts_provider == "elevenlabs":
+        if "elevenlabs" in (self.stt_provider, self.tts_provider):
             if self.elevenlabs_api_key is None:
                 missing.append("ELEVENLABS_API_KEY")
-            if self.elevenlabs_voice_id is None:
-                missing.append("ELEVENLABS_VOICE_ID")
+        if self.tts_provider == "elevenlabs" and self.elevenlabs_voice_id is None:
+            missing.append("ELEVENLABS_VOICE_ID")
         if "azure" in (self.stt_provider, self.tts_provider):
             if self.azure_openai_endpoint is None:
                 missing.append("AZURE_OPENAI_ENDPOINT")
