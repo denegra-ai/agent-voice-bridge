@@ -60,10 +60,12 @@ it is level with Whisper in Turkish and Arabic.
 ## What we learned
 
 1. **Three models lead, and 40 clips can't rank them.** gpt-4o-transcribe, ElevenLabs Scribe v2
-   and gpt-transcribe all land at roughly 3–4% WER in all three languages, and every paired
-   comparison between them includes zero. In Arabic they are clearly ahead of everything else.
-   In Turkish and English, 40 clips can't separate them from gpt-4o-mini-transcribe either (and
-   in English, not from Whisper). Scribe v2 has the lowest list price of the three.
+   and gpt-transcribe all land at about 3% WER (2.7–3.8%) in all three languages, and every
+   paired comparison between them includes zero. In Arabic all three are ahead of every other
+   model, gpt-4o-mini-transcribe included (every paired interval excludes zero). In Turkish and
+   English, 40 clips can't reliably separate them from gpt-4o-mini-transcribe, and in English not
+   from Whisper; for a few of those pairs the interval only just touches zero. Scribe v2 has the
+   lowest list price of the three.
 2. **Newest was no better.** gpt-transcribe (model version 2026-07-28) did not measurably beat
    gpt-4o-transcribe in any language.
 3. **Our bridge used a Deepgram setting that doesn't cover Arabic, and Arabic voice notes
@@ -77,9 +79,9 @@ it is level with Whisper in Turkish and Arabic.
 4. **A language hint barely matters for the top models.** For gpt-4o-transcribe, gpt-transcribe
    and Scribe v2 the hint changed WER by at most 0.4 points, sometimes for the worse. Deepgram
    gains in English (7.5% → 5.6%) and Arabic (9.2% → 7.9%), not in Turkish.
-5. **Whisper makes about twice the errors of gpt-4o-transcribe in Turkish and Arabic, and is the
-   slowest here.** The gap is clear in both languages; in English the two can't be separated. It
-   was the bridge's default until v0.1.3; this benchmark is why the default is now
+5. **Whisper makes more than twice the errors of gpt-4o-transcribe in Turkish and Arabic, and is
+   the slowest here.** The gap is clear in both languages; in English the two can't be separated. It
+   was the bridge's default before v0.1.3; this benchmark is why the default is now
    gpt-4o-transcribe, at about the same list price.
 6. **Speed is not the bottleneck.** Every model except Whisper answers a voice note (median
    length 10 s) in under a second at the median.
@@ -116,8 +118,8 @@ it is level with Whisper in Turkish and Arabic.
 - **Read speech, not real WhatsApp chat.** FLEURS speakers read sentences aloud in quiet rooms.
   Real voice notes are faster, noisier and full of dialect and code-switching, so expect higher
   WER everywhere. The ranking is the useful part, not the absolute numbers.
-- **Small sample.** 40 clips per language; differences up to about 2 points can be noise. Check
-  the paired comparisons in `results/summary.md` before reading a ranking into a gap. Some
+- **Small sample.** 40 clips per language, so gaps of a couple of points can still be noise. The
+  paired comparisons in `results/summary.md` show which gaps this sample can and can't resolve. Some
   sentences are read twice by different speakers (Turkish 5, Arabic 1, English 2), and the
   intervals treat those clips as independent.
 - **Public test set.** FLEURS is public, so some models may have seen it in training. We can't
