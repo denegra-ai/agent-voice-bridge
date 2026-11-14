@@ -42,14 +42,14 @@ transcript for 29 of 40. See below.
    `detect_language` returned empty text for 29 of 40 Arabic voice notes and transcribed one
    English clip as Swedish. On an agent that means the user gets no answer and no error. With the
    language set (`STT_LANGUAGE=ar`) Deepgram's Arabic WER drops to 14.5%. If you use Deepgram,
-   set the language.
+   set the language. Since v0.1.3 the bridge also retries an empty transcript with
+   `STT_FALLBACK_PROVIDER`.
 4. **A language hint does not help the top models.** For gpt-4o-transcribe, gpt-transcribe and
    Scribe v2 the hint changed WER by less than half a point, sometimes for the worse. Only
    Deepgram depends on it.
 5. **Whisper is the oldest, slowest and most expensive here, and makes about twice the errors of
-   the top three in Turkish and Arabic.** It is still the bridge's default (`STT_PROVIDER=openai`
-   with `whisper-1`) because it is the most widely available; if you can, pick one of the top
-   three.
+   the top three in Turkish and Arabic.** It was the bridge's default until v0.1.3; this
+   benchmark is why the default is now gpt-4o-transcribe.
 6. **Speed is not the bottleneck.** Every model except Whisper answers a 10-second voice note in
    under a second at the median. Deepgram is the fastest (0.4 s).
 

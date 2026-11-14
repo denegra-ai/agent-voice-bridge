@@ -87,7 +87,7 @@ def credential_checks(v: dict[str, str]) -> list[tuple[str, str, dict[str, str]]
                 {"Authorization": f"Bearer {v['META_ACCESS_TOKEN']}"},
             )
         )
-    providers = {v.get("STT_PROVIDER"), v.get("TTS_PROVIDER")}
+    providers = {v.get("STT_PROVIDER"), v.get("STT_FALLBACK_PROVIDER"), v.get("TTS_PROVIDER")}
     if "openai" in providers:
         checks.append(
             (
@@ -202,14 +202,19 @@ class Wizard:
             "STT_PROVIDER", "Speech-to-text", ["openai", "azure", "deepgram", "elevenlabs"]
         )
         tts = self.choice("TTS_PROVIDER", "Text-to-speech", ["openai", "azure", "elevenlabs"])
-        if "openai" in (stt, tts):
+        # STT_FALLBACK_PROVIDER is set by hand in .env; its keys are asked and checked here too.
+        fallback = self.values.get("STT_FALLBACK_PROVIDER", "")
+        if fallback:
+            print(f"  Fallback speech-to-text (from .env): {fallback}")
+        speech = {stt, fallback}
+        if "openai" in speech or tts == "openai":
             self.secret("OPENAI_API_KEY", "OpenAI API key")
-        if "azure" in (stt, tts):
+        if "azure" in speech or tts == "azure":
             self.text(
                 "AZURE_OPENAI_ENDPOINT", "Azure OpenAI endpoint (https://<name>.openai.azure.com/)"
             )
             self.secret("AZURE_OPENAI_API_KEY", "Azure OpenAI key")
-            if stt == "azure":
+            if "azure" in speech:
                 self.text(
                     "AZURE_OPENAI_STT_DEPLOYMENT", "Azure speech-to-text deployment name", "whisper"
                 )
@@ -219,9 +224,9 @@ class Wizard:
                     "Azure text-to-speech deployment name",
                     "gpt-4o-mini-tts",
                 )
-        if stt == "deepgram":
+        if "deepgram" in speech:
             self.secret("DEEPGRAM_API_KEY", "Deepgram API key")
-        if "elevenlabs" in (stt, tts):
+        if "elevenlabs" in speech or tts == "elevenlabs":
             self.secret("ELEVENLABS_API_KEY", "ElevenLabs API key")
         if tts == "elevenlabs":
             self.text("ELEVENLABS_VOICE_ID", "ElevenLabs voice ID")
@@ -251,7 +256,7 @@ def main(
             print(f"  {'✗' if problem else '✓'} {label}" + (f": {problem}" if problem else ""))
             failed = failed or problem is not None
         if (
-            values.get("STT_PROVIDER") == "elevenlabs"
+            "elevenlabs" in (values.get("STT_PROVIDER"), values.get("STT_FALLBACK_PROVIDER"))
             and values.get("TTS_PROVIDER") != "elevenlabs"
         ):
             print("  ? ElevenLabs: not checked (a speech-to-text key is only testable with audio)")

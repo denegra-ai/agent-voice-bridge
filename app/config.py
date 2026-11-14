@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import AnyHttpUrl, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SttProvider = Literal["openai", "azure", "deepgram", "elevenlabs"]
+
 
 class Settings(BaseSettings):
     # env_ignore_empty: "META_ACCESS_TOKEN=" in .env means unset, not an empty token.
@@ -31,10 +33,12 @@ class Settings(BaseSettings):
     twilio_auth_token: SecretStr | None = None
 
     # Speech-to-text
-    stt_provider: Literal["openai", "azure", "deepgram", "elevenlabs"] = "openai"
+    stt_provider: SttProvider = "openai"
+    # Tried when the primary provider fails or hears nothing, so a voice note is never dropped.
+    stt_fallback_provider: SttProvider | None = None
     stt_language: str | None = None
     openai_api_key: SecretStr | None = None
-    openai_stt_model: str = "whisper-1"
+    openai_stt_model: str = "gpt-4o-transcribe"
     deepgram_api_key: SecretStr | None = None
     deepgram_model: str = "nova-3"
 
@@ -74,6 +78,9 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_required_secrets(self) -> "Settings":
+        if self.stt_fallback_provider == self.stt_provider:
+            raise ValueError("STT_FALLBACK_PROVIDER must differ from STT_PROVIDER")
+        stt = {self.stt_provider, self.stt_fallback_provider}
         missing: list[str] = []
         if not (self.meta_enabled or self.twilio_enabled):
             missing.append("META_ACCESS_TOKEN or TWILIO_ACCOUNT_SID (at least one channel)")
@@ -84,18 +91,18 @@ class Settings(BaseSettings):
                 missing.append("META_APP_SECRET")
         if self.twilio_enabled and self.twilio_auth_token is None:
             missing.append("TWILIO_AUTH_TOKEN")
-        if self.stt_provider == "openai" and self.openai_api_key is None:
-            missing.append("OPENAI_API_KEY (STT_PROVIDER=openai)")
-        if self.stt_provider == "deepgram" and self.deepgram_api_key is None:
-            missing.append("DEEPGRAM_API_KEY (STT_PROVIDER=deepgram)")
+        if "openai" in stt and self.openai_api_key is None:
+            missing.append("OPENAI_API_KEY (speech-to-text)")
+        if "deepgram" in stt and self.deepgram_api_key is None:
+            missing.append("DEEPGRAM_API_KEY (speech-to-text)")
         if self.tts_provider == "openai" and self.openai_api_key is None:
             missing.append("OPENAI_API_KEY (TTS_PROVIDER=openai)")
-        if "elevenlabs" in (self.stt_provider, self.tts_provider):
+        if "elevenlabs" in stt or self.tts_provider == "elevenlabs":
             if self.elevenlabs_api_key is None:
                 missing.append("ELEVENLABS_API_KEY")
         if self.tts_provider == "elevenlabs" and self.elevenlabs_voice_id is None:
             missing.append("ELEVENLABS_VOICE_ID")
-        if "azure" in (self.stt_provider, self.tts_provider):
+        if "azure" in stt or self.tts_provider == "azure":
             if self.azure_openai_endpoint is None:
                 missing.append("AZURE_OPENAI_ENDPOINT")
             if self.azure_openai_api_key is None:
